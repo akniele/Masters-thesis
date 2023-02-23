@@ -3,6 +3,8 @@ import pandas as pd
 from classifier import BertClassifier
 import numpy as np
 from scipy.spatial import distance  # distance.cityblock gives manhattan distance
+from scipy.optimize import minimize
+from scipy.stats import entropy # kl-divergence/relative entropy if optional parameter qk is given, else calculate Shannon entropy
 
 
 def create_prediction_data(probs1):  # held out data that has not been used to create features
@@ -20,31 +22,31 @@ def create_prediction_data(probs1):  # held out data that has not been used to c
     return df
 
 
-def classifyProbabilityIntoFamily(largeModelProbs):
+def classifyProbabilityIntoFamily(bigprobs):
     model = BertClassifier()
     model.load_state_dict(torch.load(f'first_try.pt'))
     model.eval()
 
-    predictions = model.predict(largeModelProbs)
+    predictions = model.predict(bigprobs)
 
     return predictions  # return a number that corresponds to the family (as defined by the clusters)
 
 
-def transformProbabilities(largeModelProbs):
-    families = classifyProbabilityIntoFamily(largeModelProbs)
+def transformProbabilities(bigprobs):
+    families = classifyProbabilityIntoFamily(bigprobs)
     new_probs_sequence = []
     for i, sequence in enumerate(families):
       print(f"shape familiy: {sequence.size()}")
       for family in sequence:
         if (family == 0):
           print("0")
-          # new_probs = trans0(largeModelProbs[i])
+          # new_probs = trans0(bigprobs[i])
         elif (family == 1):
           print("1")
-          # new_probs = trans1(largeModelProbs[i])
+          # new_probs = trans1(bigprobs[i])
         else:
           print("2")
-          # new_probs = trans2(largeModelProbs[i])
+          # new_probs = trans2(bigprobs[i])
         #new_probs_sequence.append(new_probs)
 
     # return new_probs_sequence
@@ -66,7 +68,11 @@ def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.2):
     return absDiff, timeStepDiffs, sampleDiffs
 
 
-def compareDistributions(newProbs, small_probs, big_probs ):
+def compareDistributions(newProbs, small_probs, big_probs):
+
+    improvement_manhattan = []
+    improvement_weighted_manhattan = []
+
     diff_changed = distance.cityblock(small_probs, newProbs)  # calculates Manhattan distance between the distributions
     diff_unchanged = distance.cityblock(small_probs, big_probs)
 
@@ -75,13 +81,40 @@ def compareDistributions(newProbs, small_probs, big_probs ):
     # for now, if diff_changed is smaller than diff_unchanged, we'll count that as a success
     # later on: use the black-box model as baseline, the closer diff_changed to the black-box models diff, the better
     if diff_changed < diff_unchanged:
-        print("success!")
+        improvement_manhattan.append(True)
     else:
-        print("this didn't work.")
+        improvement_manhattan.append(False)
+
     if weighted_diff_changed < weighted_diff_unchanged:
-        print("more success!")
+        improvement_weighted_manhattan.append(True)
     else:
-        print("this didn't work either.")
+        improvement_weighted_manhattan.append(False)
+
+    improvement_score_manhattan = sum(improvement_manhattan) / len(improvement_manhattan)
+    improvement_score_weighted_manhattan = sum(improvement_weighted_manhattan) / len(improvement_weighted_manhattan)
+
+    return improvement_score_manhattan, improvement_score_weighted_manhattan
+
+
+""" 
+    Takes all of the probability distributions we want to change, and runs them through the transformations:
+    
+    trans0: adjusting the total probability per bucket
+    trans1: adjusting the entropy
+
+"""
+
+
+def probability_transformation(probs):
+    all_new_probs = []
+    for i, sheet in enumerate(probs):  # right now there's 100 sheets
+        all_new_probs.append([])
+        for j, timestep in sheet:  # 64 timesteps per sheet
+            new_probs = trans0(probs[i][j])
+            new_probs = trans1(new_probs)
+            all_new_probs[i].append(new_probs)
+
+    return np.array(all_new_probs)
 
 
 """
@@ -94,12 +127,12 @@ def compareDistributions(newProbs, small_probs, big_probs ):
 """
 
 
-def trans0(largeModelProbs):
+def trans0(bigprobs):
     number_of_buckets = 3
-    indices = [0, 2, 3, len(largeModelProbs)]
+    indices = [0, 2, 3, len(bigprobs)]
     bucket_probs = [-0.5, 0.5, 0]
 
-    probs = largeModelProbs.copy()
+    probs = bigprobs.copy()
     probs = torch.from_numpy(probs)  # needs to be a tensor for using torch.sort
 
     # sort probabilities, get sorted probabilities and indices
@@ -148,13 +181,28 @@ def trans0(largeModelProbs):
                     sorted_probs[indices[i]:indices[i + 1]] = sorted_probs[indices[i]:indices[i + 1]] * 0
                     break
 
-    final_probs = np.zeros(largeModelProbs.shape)
+    final_probs = np.zeros(bigprobs.shape)
     for i, index in enumerate(sorted_indices):
         final_probs[index] = sorted_probs[i]
 
     return final_probs
 
 
-def trans1(largeModelProbs):
+def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchange.com/questions/521582/controlling-the-entropy-of-a-distribution
+    z = sum(p**beta)
+    new_entropy = (-1 / z) * sum((p**beta) * (beta * np.log(p) - np.log(z)))
+    return (new_entropy - entropy_small)**2
+
+
+def trans1(bigprobs, smallprobs):
     # change the entropy of the big probability distribution to make it more similar to the entropy of the smaller model
-    pass
+    p = bigprobs
+    p = np.expand_dims(p, 1)  # unsqueeze p (optimizer wants (n,1))
+
+    small_entropy = entropy(smallprobs)
+
+    solution = minimize(fun=f, x0=1, args=(p, small_entropy)) # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
+    new_z = sum(p**solution.x)
+    transformed_p = (p**solution.x) / new_z
+    transformed_p = np.squeeze(transformed_p, 1)  # squeeze away the dimension we needed for the optimizer
+    return transformed_p  # return the big model's probs, transformed to have the same entropy as the small model's probs
