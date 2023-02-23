@@ -2,6 +2,7 @@ import torch
 import pandas as pd
 from classifier import BertClassifier
 import numpy as np
+from tqdm import tqdm
 from scipy.spatial import distance  # distance.cityblock gives manhattan distance
 from scipy.optimize import minimize
 from scipy.stats import entropy # kl-divergence/relative entropy if optional parameter qk is given, else calculate Shannon entropy
@@ -68,27 +69,28 @@ def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.2):
     return absDiff, timeStepDiffs, sampleDiffs
 
 
-def compareDistributions(newProbs, small_probs, big_probs):
-
+def compare_distributions(new_probs, small_probs, big_probs):
     improvement_manhattan = []
     improvement_weighted_manhattan = []
 
-    diff_changed = distance.cityblock(small_probs, newProbs)  # calculates Manhattan distance between the distributions
-    diff_unchanged = distance.cityblock(small_probs, big_probs)
+    for i, sheet in tqdm(enumerate(big_probs[:2]), desc="Comparisons"):  # right now there's 100 sheets
+        for j, timestep in enumerate(sheet):  # 64 time steps per sheet
+            diff_changed = distance.cityblock(small_probs[i][j], new_probs[i][j])  # calculates Manhattan distance
+            diff_unchanged = distance.cityblock(small_probs[i][j], big_probs[i][j])
 
-    _, weighted_diff_changed, _ = weightedManhattanDistance(small_probs, newProbs)
-    _, weighted_diff_unchanged, _ = weightedManhattanDistance(small_probs, big_probs)
-    # for now, if diff_changed is smaller than diff_unchanged, we'll count that as a success
-    # later on: use the black-box model as baseline, the closer diff_changed to the black-box models diff, the better
-    if diff_changed < diff_unchanged:
-        improvement_manhattan.append(True)
-    else:
-        improvement_manhattan.append(False)
+            _, weighted_diff_changed, _ = weightedManhattanDistance(small_probs[i][j], new_probs[i][j])
+            _, weighted_diff_unchanged, _ = weightedManhattanDistance(small_probs[i][j], big_probs[i][j])
+            # for now, if diff_changed is smaller than diff_unchanged, we'll count that as a success
+            # later on: use black-box model as baseline, the closer diff_changed to black-box model's diff, the better
+            if diff_changed < diff_unchanged:
+                improvement_manhattan.append(True)
+            else:
+                improvement_manhattan.append(False)
 
-    if weighted_diff_changed < weighted_diff_unchanged:
-        improvement_weighted_manhattan.append(True)
-    else:
-        improvement_weighted_manhattan.append(False)
+            if weighted_diff_changed < weighted_diff_unchanged:
+                improvement_weighted_manhattan.append(True)
+            else:
+                improvement_weighted_manhattan.append(False)
 
     improvement_score_manhattan = sum(improvement_manhattan) / len(improvement_manhattan)
     improvement_score_weighted_manhattan = sum(improvement_weighted_manhattan) / len(improvement_weighted_manhattan)
@@ -105,13 +107,13 @@ def compareDistributions(newProbs, small_probs, big_probs):
 """
 
 
-def probability_transformation(probs):
+def probability_transformation(big_probs, small_probs):
     all_new_probs = []
-    for i, sheet in enumerate(probs):  # right now there's 100 sheets
+    for i, sheet in tqdm(enumerate(big_probs[:2]), desc="Transformations"):  # right now there's 100 sheets
         all_new_probs.append([])
-        for j, timestep in sheet:  # 64 timesteps per sheet
-            new_probs = trans0(probs[i][j])
-            new_probs = trans1(new_probs)
+        for j, timestep in enumerate(sheet):  # 64 timesteps per sheet
+            new_probs = trans1(big_probs[i][j], small_probs[i][j])
+            #new_probs = trans0(new_probs)
             all_new_probs[i].append(new_probs)
 
     return np.array(all_new_probs)

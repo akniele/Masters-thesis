@@ -25,7 +25,7 @@ from trainingDataClassifier import prepare_training_data
 from transformation import classifyProbabilityIntoFamily, create_prediction_data, transformProbabilities
 from transformation import trans0
 from transformation import probability_transformation
-from transformation import compareDistributions
+from transformation import compare_distributions
 
 
 if __name__ == "__main__":
@@ -79,9 +79,9 @@ if __name__ == "__main__":
 
     """transform big probs to be more similar to small probs"""
 
-    transformed_probs = probability_transformation(probs1)
+    transformed_probs = probability_transformation(probs1, probs0)
 
-    improvement_manhattan, improvement_weighted = compareDistributions(transformed_probs, probs0, probs1)
+    improvement_manhattan, improvement_weighted = compare_distributions(transformed_probs, probs0, probs1)
 
     print(f" Using the Manhattan distance, {improvement_manhattan * 100}% "
           f"of the transformed distributions are closer to the target distribution.\nFor the weighted Manhattan"
