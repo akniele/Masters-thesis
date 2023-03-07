@@ -2,9 +2,9 @@
 import pandas as pd
 
 
-def prepare_training_data(probs1, labels):
+def prepare_training_data(probs1, labels, num_sheets):
     formatted_data = []
-    for i, sheets in enumerate(probs1[:10]):
+    for i, sheets in enumerate(probs1[:num_sheets]):
         sequence = []
         for j, samples in enumerate(sheets):
             sorted_probs = sorted(samples, reverse=True)
@@ -12,7 +12,7 @@ def prepare_training_data(probs1, labels):
         formatted_data.append(sequence)
 
     formatted_labels = []
-    for i in range(10):
+    for i in range(num_sheets):
         formatted_labels.append([])
         for j in range(64):
             formatted_labels[i].append(labels[j + (i*32)])

@@ -7,11 +7,16 @@ from kneed import KneeLocator
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.metrics import calinski_harabasz_score
+from sklearn.cluster import AgglomerativeClustering
 import pandas as pd
 import plotly.express as px
 from collections import defaultdict
 
-N_CLUSTERS = 3
+
+def agglomerative_clustering(feature_vector, n_clusters):
+    clustering = AgglomerativeClustering(n_clusters=n_clusters).fit(feature_vector)
+    labels = clustering.labels_
+    return labels
 
 
 def k_means_clustering(feature_vector, n_clusters):
@@ -117,3 +122,4 @@ def visualize_cluster_probs(labels):
                   range_x=[0, 29], range_y=[1e-7,1], log_y=True)
     fig["layout"].pop("updatemenus")  # optional, drop animation buttons
     fig.show()
+

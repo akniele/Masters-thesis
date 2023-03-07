@@ -15,6 +15,7 @@ class BertClassifier(nn.Module):
         self.bert = BertModel(conf)
         self.linear = nn.Linear(256, num_classes)
         self.logsoftmax = nn.LogSoftmax(dim=1)
+
         self.train_acc = list()
         self.train_loss = list()
         self.val_acc = list()

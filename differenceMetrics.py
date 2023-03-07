@@ -14,6 +14,8 @@ from scipy.stats import entropy # kl-divergence/relative entropy if optional par
 
 
 """Difference in entropy"""
+
+
 def entropy_difference(probs0, probs1):
     small_entropy = entropy(probs0)
     big_entropy = entropy(probs1)
@@ -23,20 +25,25 @@ def entropy_difference(probs0, probs1):
 
 """Difference in probability per bucket"""
 
-def sort_probs(big_probs, small_probs):  # sorts the probabilities by the big probabilities
+
+def sort_probs(big_probs, small_probs, sort_by=0):  # sorts the probabilities by the big probabilities
     small_sample = small_probs.copy()  # create copies of the distributions
     big_sample = big_probs.copy()
 
     zipped_samples = [(big_samp, small_samp) for big_samp, small_samp in
                       zip(big_sample, small_sample)]  # zip the two prob distributions
-    zipped_samples.sort(key=lambda a: a[0], reverse=True)  # sort by the big model's probabilities
+    zipped_samples.sort(key=lambda a: a[sort_by], reverse=True)  # sort by the big model's probabilities
     big_sorted = np.array([prob1 for (prob1, prob2) in zipped_samples])
     small_sorted = np.array([prob2 for (prob1, prob2) in zipped_samples])
 
     return big_sorted, small_sorted
 
 
-def bucket_diff_top_k(probs0, probs1, number_of_buckets=3, indices=[0, 10, 35]):
+def bucket_diff_top_k(probs0, probs1, number_of_buckets=None, indices=None):
+    if indices is None:
+        indices = [0, 10, 35]
+    if number_of_buckets is None:
+        number_of_buckets = 3
     big_sample_sorted, small_sample_sorted = sort_probs(probs1, probs0)  # call function sort_probs
 
     indices.append(len(big_sample_sorted))  # add index of len of one sheet
@@ -54,6 +61,7 @@ def bucket_diff_top_k(probs0, probs1, number_of_buckets=3, indices=[0, 10, 35]):
 
 
 """Is the correct token in the top k?"""
+
 
 def get_topk_success(probs, k):  # how high is the combined percentage of the top 10 tokens?
     # And is the correct token one of the top 10?
@@ -125,8 +133,8 @@ def average_len_topk(probs, tokens, topk):
     return average
 
 
-def compare_average_topk_len(probs0, probs1, topk=10):
-    small_average, big_average = average_len_topk(probs0, tokens, 10), average_len_topk(probs1, tokens, 10)
+def compare_average_topk_len(probs0, probs1, tokens, topk=10):
+    small_average, big_average = average_len_topk(probs0, tokens, topk), average_len_topk(probs1, tokens, topk)
     if math.isclose(big_average, small_average, rel_tol=0.0, abs_tol=0.5):
         return [1]
     else:
@@ -155,7 +163,9 @@ def get_bucket_size(sample, number_of_buckets, bucket_probs):
     return bucket
 
 
-def bucket_diff_top_p(probs0, probs1, number_of_buckets=3, bucket_probs=[0.4, 0.1, 0.5]):
+def bucket_diff_top_p(probs0, probs1, number_of_buckets=3, bucket_probs=None):
+    if bucket_probs is None:
+        bucket_probs = [0.4, 0.1, 0.5]
     big_sample_sorted, small_sample_sorted = sort_probs(probs1, probs0)  # call function sort_probs
 
     bucket_small = get_bucket_size(small_sample_sorted, number_of_buckets, bucket_probs)

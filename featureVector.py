@@ -4,9 +4,9 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 
-def create_bucket_feature_vector(functions, bucket_list):
+def create_bucket_feature_vector(functions, bucket_list, num_sheets):
     feature_vector = []
-    for i, sheet in enumerate(probs0[:20]):  # for sheet in sheets
+    for i, sheet in enumerate(probs0[:num_sheets]):  # for sheet in sheets
         for j in range(len(sheet)):  # for sample in sheet
             vector = []
             for function in functions: # right now there is only one function
@@ -18,9 +18,9 @@ def create_bucket_feature_vector(functions, bucket_list):
     return np.array(feature_vector, dtype=float)
 
 
-def create_feature_vector(functions):
+def create_feature_vector(functions, probs0, probs1, num_sheets):
     feature_vector = []
-    for i, sheet in enumerate(probs0[:20]):  # for sheet in sheets
+    for i, sheet in enumerate(probs0[:num_sheets]):  # for sheet in sheets
         for j in range(len(sheet)):  # for sample in sheet
             vector = []
             for function in functions:

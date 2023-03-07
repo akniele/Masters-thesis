@@ -12,12 +12,19 @@
 import pickle
 import numpy as np
 import torch
+from scipy.stats import entropy
+import sys
 
 from differenceMetrics import bucket_diff_top_p, bucket_diff_top_k, compare_topk_success, compare_topk_prob
 from differenceMetrics import compare_average_topk_len, entropy_difference
 from featureVector import create_bucket_feature_vector, create_feature_vector, scale_feature_vector
 from clustering import k_means_clustering
 from clustering import find_optimal_n, label_distribution
+from clustering import agglomerative_clustering
+
+sys.path.insert(1, '../Non-Residual-GANN')
+from load_data_new import generateData
+from get_means_from_training_data import get_mean_entropy_from_training_data
 from classifier import BertClassifier
 from trainClassifier import train
 from evaluateClassifier import evaluate
@@ -31,38 +38,68 @@ from transformation import compare_distributions
 if __name__ == "__main__":
 
     """Load data"""
-    # data
-    probs0 = pickle.load(open("probs_0.p", "rb"))
-    probs1 = pickle.load(open("probs_1.p", "rb"))
-    probs0 = probs0.detach().numpy()
-    probs1 = probs1.detach().numpy()
-    token_dict = pickle.load(open("reverseVocab.p", "rb"))
-    tokens = [token_dict[i] for i in range(len(token_dict))]
+    NUM_TRAIN_SHEETS = 9000  # for creating feature vectors, and training classifier
+
+    # small_probs, big_probs, small_indices_final, big_indices_final = generateData(
+    #     num_samples=2000, truncate=True, topk=256, save=False)
+    small_probs, small_indices_final = generateData(
+             num_samples=2000, truncate=True, topk=256, save=False)
+
+    print(len(small_probs))
+    print(len(small_indices_final))
+    print(small_probs[0][0])
+    print(len(small_probs[0][0]))
+
+    # token_dict = pickle.load(open("reverseVocab.p", "rb"))
+    # tokens = [token_dict[i] for i in range(len(token_dict))]
+    #
 
     # """create scaled feature vector"""
-    # function_list = [bucket_diff_top_k]  # difference metrics to use for creating feature vector
-    # bucket_list = [(3, [0, 10, 35]), (4, [0, 5, 15, 45]), (2, [0, 20])]
-    # feature_vector = create_bucket_feature_vector(function_list, bucket_list)
-    # #feature_vector = create_feature_vector(function_list)
+    # function_list = [bucket_diff_top_k, entropy_difference]  # difference metrics to use for creating feature vector
+    #
+    # feature_vector = create_feature_vector(function_list, probs0, probs1, NUM_TRAIN_SHEETS)
     #
     # scaled_features = scale_feature_vector(feature_vector)  # scale feature vector
     #
     # """find optimal number of clusters for clustering, and cluster"""
     # elbow, silhouette, calinski = find_optimal_n(scaled_features)
     #
-    # N_CLUSTERS = calinski
+    # N_CLUSTERS = elbow
     #
-    # labels = k_means_clustering(scaled_features, N_CLUSTERS)
+    # labels = agglomerative_clustering(scaled_features, N_CLUSTERS)
+    #
+    # label_distribution = label_distribution(N_CLUSTERS, labels)
+    #
+    # print(f"label distribution: {label_distribution}")
+
+    # entropies = get_mean_entropy_from_training_data(NUM_TRAIN_SHEETS, probs0, labels, N_CLUSTERS)
+    #
+    # for i in range(len(entropies.keys())):
+    #     print(f"mean entropy cluster {i}: {np.mean(entropies[f'entropy_{i}'])}")
+    #
+    # data = create_feature_vector([bucket_diff_top_k], probs0, probs1, NUM_TRAIN_SHEETS)
+    # mean_1 = -(np.mean(data[:, 0]))  # added minus because the bucket_diff_top_k returns how much more the big bucket
+    #                                  # has than the small model
+    # mean_2 = -(np.mean(data[:, 1]))
+    # mean_3 = -(np.mean(data[:, 2]))
+    #
+    # print(mean_1)
+    # print(mean_2)
+    # print(mean_3)
+    #
+    #
     #
     # """train classifier on big probs and labels from clustering step"""
     # NUM_CLASSES = N_CLUSTERS
     # BATCH_SIZE = 16
-    # EPOCHS = 20
+    # EPOCHS = 2
     # LR = 5e-5
     #
-    # df = prepare_training_data(probs1, labels)
+    # df = prepare_training_data(probs1, labels, NUM_TRAIN_SHEETS)
+    #
     #
     # np.random.seed(112)
+    # torch.manual_seed(0)
     # df_train, df_val, df_test = np.split(df.sample(frac=1, random_state=42),
     #                                      [int(.8 * len(df)), int(.95 * len(df))])
     #
@@ -79,15 +116,18 @@ if __name__ == "__main__":
 
     """transform big probs to be more similar to small probs"""
 
-    transformed_probs = probability_transformation(probs1, probs0)
+    #new_probs = trans0(probs1[0][2])
 
-    improvement_manhattan, improvement_weighted = compare_distributions(transformed_probs, probs0, probs1)
+    """ The probability transformation function should have an argument stating which transformations should be
+    carried out, and in which order. It should then, for each transformation, get the mean from the training data
+    
+    
+    """
 
-    print(f" Using the Manhattan distance, {improvement_manhattan * 100}% "
-          f"of the transformed distributions are closer to the target distribution.\nFor the weighted Manhattan"
-          f"distance, the score is {improvement_weighted * 100}%.")
-
-    # TODO: adapt comparison function to compare all distributions at once
-    # TODO: debug this code section by section
-
-
+    # transformed_probs = probability_transformation(probs1, probs0)
+    #
+    # improvement_manhattan, improvement_weighted = compare_distributions(transformed_probs, probs0, probs1)
+    #
+    # print(f" Using the Manhattan distance, {improvement_manhattan * 100}% "
+    #       f"of the transformed distributions are closer to the target distribution.\nFor the weighted Manhattan "
+    #       f"distance, the score is {improvement_weighted * 100}%.")
