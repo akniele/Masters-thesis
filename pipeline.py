@@ -14,10 +14,13 @@ import numpy as np
 import torch
 from scipy.stats import entropy
 import sys
+from tqdm import tqdm
+import pandas as pd
 
 from differenceMetrics import bucket_diff_top_p, bucket_diff_top_k, compare_topk_success, compare_topk_prob
 from differenceMetrics import compare_average_topk_len, entropy_difference
 from featureVector import create_bucket_feature_vector, create_feature_vector, scale_feature_vector
+from featureVector import create_and_save_scaled_feature_vector
 from clustering import k_means_clustering
 from clustering import find_optimal_n, label_distribution
 from clustering import agglomerative_clustering
@@ -38,45 +41,74 @@ from transformation import compare_distributions
 if __name__ == "__main__":
 
     """Load data"""
-    NUM_TRAIN_SHEETS = 9000  # for creating feature vectors, and training classifier
+    NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
 
     # small_probs, big_probs, small_indices_final, big_indices_final = generateData(
-    #     num_samples=2000, truncate=True, topk=256, save=False)
-    small_probs, small_indices_final = generateData(
-             num_samples=2000, truncate=True, topk=256, save=False)
+    #          num_samples=100000, truncate=True, topk=256, save=True)
 
-    print(len(small_probs))
-    print(len(small_indices_final))
-    print(small_probs[0][0])
-    print(len(small_probs[0][0]))
+    # for i in tqdm(range(9)):
+    #     print("  => LOADING DATA")
+    #
+    #     with open(f"train_data/train_big_100000_{i}.pkl", "rb") as f:
+    #         probs1 = pickle.load(f)
+    #
+    #     probs1 = probs1.numpy()
+    #
+    #     with open(f"train_data/train_small_100000_{i}.pkl", "rb") as g:
+    #         probs0 = pickle.load(g)
+    #
+    #     probs0 = probs0.numpy()
+    #
+    #     print("  => LOADING FEATURE VECTORS")
+    #
+    #     """create scaled feature vector"""
+    #
+    #     function_list = [bucket_diff_top_k, entropy_difference]  # difference metrics to use for creating feature vector
+    #     create_and_save_scaled_feature_vector(function_list, probs0, probs1, NUM_TRAIN_SHEETS, i)
+
+    scaled_features = np.zeros((64*NUM_TRAIN_SHEETS*9, 4))
+
+    for i in range(9):
+        print(f"OPENING file {i}")
+        with open(f"train_data/scaled_features_{i}.pkl", "rb") as f:
+            feature = pickle.load(f)
+        print(f"DONE OPENING file {i}")
+        scaled_features[i*(64*NUM_TRAIN_SHEETS):(i+1)*(64*NUM_TRAIN_SHEETS)] = feature
+
+    print(f"Shape of scaled features: {scaled_features.shape}")
+    print(f"[0] of scaled_features: {scaled_features[0]}")
+
+        # with open(f"train_data/scaled_features.pkl", "rb") as k:
+        #     scaled_features = pickle.load(k)
 
     # token_dict = pickle.load(open("reverseVocab.p", "rb"))
     # tokens = [token_dict[i] for i in range(len(token_dict))]
     #
 
-    # """create scaled feature vector"""
-    # function_list = [bucket_diff_top_k, entropy_difference]  # difference metrics to use for creating feature vector
-    #
-    # feature_vector = create_feature_vector(function_list, probs0, probs1, NUM_TRAIN_SHEETS)
-    #
-    # scaled_features = scale_feature_vector(feature_vector)  # scale feature vector
-    #
-    # """find optimal number of clusters for clustering, and cluster"""
-    # elbow, silhouette, calinski = find_optimal_n(scaled_features)
-    #
-    # N_CLUSTERS = elbow
-    #
-    # labels = agglomerative_clustering(scaled_features, N_CLUSTERS)
-    #
-    # label_distribution = label_distribution(N_CLUSTERS, labels)
-    #
-    # print(f"label distribution: {label_distribution}")
 
+    print("  => CLUSTERING")
+    #print("  => FINDING OPTIMAL N")
+    """find optimal number of clusters for clustering, and cluster"""
+    # elbow = find_optimal_n(scaled_features)
+
+    N_CLUSTERS = 3
+
+    print("  => GET CLUSTER LABELS")
+
+    labels = k_means_clustering(scaled_features, N_CLUSTERS)
+
+    label_distribution = label_distribution(N_CLUSTERS, labels)
+
+    print(f"label distribution: {label_distribution}")
+
+    # print("  => GET MEAN ENTROPY")
+    #
     # entropies = get_mean_entropy_from_training_data(NUM_TRAIN_SHEETS, probs0, labels, N_CLUSTERS)
     #
+    # print(f"entropy means: {entropies}")
     # for i in range(len(entropies.keys())):
     #     print(f"mean entropy cluster {i}: {np.mean(entropies[f'entropy_{i}'])}")
-    #
+
     # data = create_feature_vector([bucket_diff_top_k], probs0, probs1, NUM_TRAIN_SHEETS)
     # mean_1 = -(np.mean(data[:, 0]))  # added minus because the bucket_diff_top_k returns how much more the big bucket
     #                                  # has than the small model
@@ -86,31 +118,50 @@ if __name__ == "__main__":
     # print(mean_1)
     # print(mean_2)
     # print(mean_3)
+
+    # feature_means = dict()
+    # feature_means["entropy"] = [np.mean(entropies[f'entropy{i}']) for i in range(len(entropies.keys()))]
     #
-    #
-    #
-    # """train classifier on big probs and labels from clustering step"""
-    # NUM_CLASSES = N_CLUSTERS
-    # BATCH_SIZE = 16
-    # EPOCHS = 2
-    # LR = 5e-5
-    #
-    # df = prepare_training_data(probs1, labels, NUM_TRAIN_SHEETS)
-    #
-    #
-    # np.random.seed(112)
-    # torch.manual_seed(0)
-    # df_train, df_val, df_test = np.split(df.sample(frac=1, random_state=42),
-    #                                      [int(.8 * len(df)), int(.95 * len(df))])
-    #
-    # model = BertClassifier(NUM_CLASSES)
-    #
-    # train(model, df_train, df_val, LR, EPOCHS, BATCH_SIZE)
-    #
-    # torch.save(model.state_dict(), f'first_try.pt')
-    #
-    # """test classifier"""
-    # evaluate(model, df_test)
+    # print(feature_means["entropy"])
+
+    """train classifier on big probs and labels from clustering step"""
+    NUM_CLASSES = N_CLUSTERS
+    BATCH_SIZE = 16
+    EPOCHS = 5
+    LR = 5e-7
+
+    print("  => PREPARE TRAINING DATA FOR CLASSIFIER")
+
+    df = False
+
+    for i in tqdm(range(9)):
+        with open(f"train_data/train_big_100000_{i}.pkl", "rb") as f:
+            probs1 = pickle.load(f)
+        probs1 = probs1.numpy()
+        df_tmp = prepare_training_data(probs1, labels, NUM_TRAIN_SHEETS)
+        if type(df) is bool:
+            df = df_tmp
+        else:
+            df = pd.concat([df, df_tmp], axis=0, ignore_index=True)
+
+    print(f"length of pandas frame: {df.shape[0]}")
+    print(f"Number of columns: {len(df.columns)}")
+
+    np.random.seed(112)
+    torch.manual_seed(0)
+    df_train, df_val, df_test = np.split(df.sample(frac=1, random_state=42),
+                                         [int(.8 * len(df)), int(.95 * len(df))])
+
+    model = BertClassifier(NUM_CLASSES)
+
+    print("  => STARTING TRAINING")
+    train(model, df_train, df_val, LR, EPOCHS, BATCH_SIZE, num_classes=NUM_CLASSES)
+
+    torch.save(model.state_dict(), f'first_try.pt')
+
+    print("  => EVALUATING MODEL")
+    """test classifier"""
+    evaluate(model, df_test, num_classes=NUM_CLASSES)
 
     # held_out_data = create_prediction_data(probs1)
 

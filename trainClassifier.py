@@ -5,7 +5,6 @@ from torch import nn
 from torch.optim import Adam
 from tqdm import tqdm
 from collections import defaultdict
-import pickle
 from plot_acc_and_loss import acc_loss_plot
 
 
@@ -29,66 +28,68 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
 
         total_acc_train = 0
         total_loss_train = 0
-        # total_acc_per_class = defaultdict()
 
-        for train_input, train_label in tqdm(train_dataloader):
-            train_label = train_label.to(device)
-            input_embeds = train_input.to(device)
+        with tqdm(train_dataloader, total=(len(train_dataloader)), unit="batch", desc="Train epoch %i" % epoch_num) as batches:
+            for train_input, train_label in batches:
+                train_label = train_label.to(device)
+                # print(f"train label size: {train_label.size()}")
+                input_embeds = train_input.to(device)
+                # print(f"input embeds size: {input_embeds.size()}")
 
-            output = model(inputs_embeds=input_embeds)
-            print(f"model output: {output}")
-            output = torch.permute(output, (0, 2, 1))
-            print(f"permuted output: {output}")
+                output = model(inputs_embeds=input_embeds)
+                output = torch.permute(output, (0, 2, 1))
+                # print(f"output size: {output.size()}")
+                #
+                # print(f" length of train_label.long(): {train_label.long().size()}")
+                #
+                # print(f" train_label.long(): {train_label.long()}")
+                # print(f" train_label: {train_label}")
 
-            batch_loss = criterion(output, train_label.long())
-            total_loss_train += batch_loss.item()
+                batch_loss = criterion(output, train_label.long())
 
-            acc = (output.argmax(dim=1) == train_label).sum().item()
-            print(f"acc: {acc}")
-            total_acc_train += acc
-            print(f"total_acc_train: {total_acc_train}")
-            print(f"len train data: {len(train_data)}")
+                total_loss_train += batch_loss.item()
 
-            # for num in num_classes:
-            #     if output.argmax(dim=1) == train_label:
-            #         total_acc_per_class[f"acc_{num}"] += (output.argmax(dim=1) == train_label).sum().item()
-            #         total_acc_per_class[f"num_examples_{num}"] += 1
+                acc = (output.argmax(dim=1) == train_label).sum().item()
+                total_acc_train += acc
 
-            model.zero_grad()
-            batch_loss.backward()
-            optimizer.step()
+                model.zero_grad()
+                batch_loss.backward()
+                optimizer.step()
+
+                batches.set_postfix(loss=batch_loss.item() / (BATCH_SIZE*64), accuracy=(acc/(BATCH_SIZE*64)))
 
         model.train_acc.append(total_acc_train / len(train_data))
         model.train_loss.append(total_loss_train / len(train_data))
         total_acc_val = 0
         total_loss_val = 0
-        # total_val_acc_per_class = defaultdict()
 
         with torch.no_grad():
 
-            for val_input, val_label in val_dataloader:
-                val_label = val_label.to(device)
-                input_embeds = val_input.to(device)
+            with tqdm(val_dataloader, total=(len(val_dataloader)), unit="batch",
+                      desc="Val epoch %i" % epoch_num) as val_batches:
 
-                output = model(inputs_embeds=input_embeds)
-                output = torch.permute(output, (0, 2, 1))
+                for val_input, val_label in val_batches:
+                    val_label = val_label.to(device)
+                    input_embeds = val_input.to(device)
 
-                batch_loss = criterion(output, val_label.long())
-                total_loss_val += batch_loss.item()
+                    output = model(inputs_embeds=input_embeds)
+                    output = torch.permute(output, (0, 2, 1))
 
-                acc = (output.argmax(dim=1) == val_label).sum().item()
-                total_acc_val += acc
+                    batch_loss = criterion(output, val_label.long())
+                    total_loss_val += batch_loss.item()
 
-                # for num in num_classes:
-                #     if output.argmax(dim=1) == train_label:
-                #         total_val_acc_per_class[f"acc_{num}"] += (output.argmax(dim=1) == train_label).sum().item()
-                #         total_val_acc_per_class[f"num_examples_{num}"] += 1
+                    acc = (output.argmax(dim=1) == val_label).sum().item()
+                    total_acc_val += acc
+
+                    val_batches.set_postfix(loss=batch_loss.item() / (BATCH_SIZE*64), accuracy=(acc / (BATCH_SIZE * 64)))
 
             model.val_acc.append(total_acc_val / len(val_data))
             model.val_loss.append(total_loss_val / len(val_data))
 
         print(
-            f'Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / len(train_data): .4f} | Train Accuracy: {total_acc_train / len(train_data): .4f} | Val Loss: {total_loss_val / len(val_data): .4f} | Val Accuracy: {total_acc_val / len(val_data): .4f}')
+            f'Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | Train Accuracy: '
+            f'{total_acc_train / (len(train_data)*64): .4f} | Val Loss: {total_loss_val / (len(val_data)*64): .4f} '
+            f'| Val Accuracy: {total_acc_val / (len(val_data)*64): .4f}')
 
     acc_loss = defaultdict()
     acc_loss["train_accuracy"] = model.train_acc
@@ -97,6 +98,3 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
     acc_loss["val_loss"] = model.val_loss
 
     acc_loss_plot(acc_loss)  # create a plot with train and val accuracy and loss
-
-    # with open("acc_loss_pcm_softmax.pkl", "wb") as p:
-    #     pickle.dump(acc_loss, p)

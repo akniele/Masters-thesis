@@ -20,7 +20,8 @@ CHECKPOINT = "Epoch-8"
 SEQUENCE_LENGTH = 64  # Of tokenized pretrained data.
 VOCAB_LENGTH = 16384
 NUM_ALTERATIONS = 8
-NUM_SAMPLES = 100  # should be divisible by 1000
+NUM_SAMPLES = 100000  # should be divisible by 1000
+TOPK = 256
 
 SAVE = False
 TRUNCATE = False
@@ -31,95 +32,110 @@ def generateData(tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUEN
 
     print("  => LOADING BIG MODEL")
     bigModel = loadGenerator(BIG_MODEL_PATH, CHECKPOINT).to(DEVICE)
-    print(f"size of big model: {getsizeof(bigModel)}")
+    #print(f"size of big model: {getsizeof(bigModel)}")
     bigModel.eval()
 
     print("  => LOADING SMALL MODEL")
     smallModel = loadGenerator(SMALL_MODEL_PATH, CHECKPOINT).to(DEVICE)
-    print(f"size of small model: {getsizeof(smallModel)}")
+    #print(f"size of small model: {getsizeof(smallModel)}")
     smallModel.eval()
 
     print("  => LOADING PRE TOKENIZED DATASET")
     with open(tokenized_data_path, "rb") as f:
         data = pickle.load(f)
-        print(f"size of data: {getsizeof(data)}")
+        #print(f"size of data: {getsizeof(data)}")
 
-    print(f"psutil after loading data: {psutil.virtual_memory()}")
+    #print(f"psutil after loading data: {psutil.virtual_memory()}")
 
     print("  => FORMATTING DATA")
-    new_data = [data[i] for i in range(len(data)) if len(data[i]) == sequence_length][:2000]
+    new_data = [data[i] for i in range(len(data)) if len(data[i]) == sequence_length][:num_samples]
     del data
-    print(f"size of new data: {getsizeof(new_data)}")
+    #print(f"size of new data: {getsizeof(new_data)}")
     data = Dataset.from_pandas(pd.DataFrame({"data": new_data}))
     data.set_format("torch")
-    loader = torch.utils.data.DataLoader(data["data"], batch_size=1)
+    loader = iter(torch.utils.data.DataLoader(data["data"], batch_size=1))  # added iter so it doesn't load the first data over and over
 
-    print(f"psutil before initializing the arrays: {psutil.virtual_memory()}")
-    print("  => INITIALIZING ARRAYS")
-    big_probabilities = torch.zeros((10000, sequence_length, VOCAB_LENGTH))
-    small_probabilities = torch.zeros((10000, sequence_length, VOCAB_LENGTH))
+    for i in tqdm.tqdm(range(10)):
 
-    print(f"psutil before initializing the index arrays: {psutil.virtual_memory()}")
-    big_indices = torch.zeros((10000, sequence_length, VOCAB_LENGTH))
-    small_indices = torch.zeros((10000, sequence_length, VOCAB_LENGTH))
+        #print(f"psutil before initializing the arrays: {psutil.virtual_memory()}")
+        print("  => INITIALIZING ARRAYS")
+        big_probabilities = torch.zeros((num_samples//10, sequence_length, TOPK))
+        small_probabilities = torch.zeros((num_samples//10, sequence_length, TOPK))
 
-    tmp_big = torch.zeros((100, SEQUENCE_LENGTH, VOCAB_LENGTH))
-    tmp_small = torch.zeros((100, SEQUENCE_LENGTH, VOCAB_LENGTH))
+        #print(f"psutil before initializing the index arrays: {psutil.virtual_memory()}")
+        big_indices = torch.zeros((num_samples//10, sequence_length, TOPK))
+        small_indices = torch.zeros((num_samples//10, sequence_length, TOPK))
 
-    print("  => DONE INITIALIZING ARRAYS")
+        tmp_big = torch.zeros((100, SEQUENCE_LENGTH, VOCAB_LENGTH))
+        tmp_small = torch.zeros((100, SEQUENCE_LENGTH, VOCAB_LENGTH))
 
-    def getData(inputIDs):
-        smallProb, _, _, _, _ = CompareModels._generateProbAndSamples(
-            inputIDs=inputIDs,
-            numAlterations=NUM_ALTERATIONS,
-            model=smallModel,
-            samplingStrat=SamplingTechniques.SAMPLE_NO_REPLACEMENT,
-            samplingParams={}
-        )
-        bigProb, _, _, _, _ = CompareModels._generateProbAndSamples(
-            inputIDs=inputIDs,
-            numAlterations=NUM_ALTERATIONS,
-            model=bigModel,
-            samplingStrat=SamplingTechniques.SAMPLE_NO_REPLACEMENT,
-            samplingParams={}
-        )
+        print("  => DONE INITIALIZING ARRAYS")
 
-        return smallProb, bigProb
+        def getData(inputIDs):
+            smallProb, _, _, _, _ = CompareModels._generateProbAndSamples(
+                inputIDs=inputIDs,
+                numAlterations=NUM_ALTERATIONS,
+                model=smallModel,
+                samplingStrat=SamplingTechniques.SAMPLE_NO_REPLACEMENT,
+                samplingParams={}
+            )
+            bigProb, _, _, _, _ = CompareModels._generateProbAndSamples(
+                inputIDs=inputIDs,
+                numAlterations=NUM_ALTERATIONS,
+                model=bigModel,
+                samplingStrat=SamplingTechniques.SAMPLE_NO_REPLACEMENT,
+                samplingParams={}
+            )
 
-    index = 0
-    for example in tqdm.tqdm(loader):
-        inputIDs = (torch.tensor(example).to(DEVICE))  # size [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
-        smallProb, bigProb = getData(inputIDs)
+            return smallProb, bigProb
 
-        if index == num_samples:
-            break
-        index += 1
+        index = 0
+        for example in loader:
+            if index == num_samples//10:
+                break
+            inputIDs = (torch.tensor(example).to(DEVICE))  # size [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
+            smallProb, bigProb = getData(inputIDs)
 
-        tmp_small[index % 100] = smallProb.detach().cpu()
-        tmp_big[index % 100] = bigProb.detach().cpu()
+            tmp_small[index % 100] = smallProb.detach().cpu()
+            tmp_big[index % 100] = bigProb.detach().cpu()
 
-        if index % 100 == 0 and truncate:
-            print(f"iteration: {index}")
-            small_ordered, small_indx = torch.sort(tmp_small, descending=True)
-            big_ordered, big_indx = torch.sort(tmp_big, descending=True)
+            index += 1
 
-            small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
-            big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
+            if index % 100 == 0 and truncate:
+                small_ordered, small_indx = torch.sort(tmp_small, descending=True)
+                big_ordered, big_indx = torch.sort(tmp_big, descending=True)
 
-            small_probabilities[index-100:index, :, :] = small_ordered
-            big_probabilities[index - 100:index, :, :] = big_ordered
+                small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
+                big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
 
-            small_indices[index-100:index, :, :] = small_indx
-            big_indices[index - 100:index, :, :] = big_indx
+                small_probabilities[index-100:index, :, :] = small_ordered
+                big_probabilities[index - 100:index, :, :] = big_ordered
+
+                small_indices[index-100:index, :, :] = small_indx
+                big_indices[index - 100:index, :, :] = big_indx
+
+        if save:
+            print("  => SAVING...")
+            with open(f"../pipeline/train_data/train_big_{num_samples}_{i}.pkl", "wb") as f:
+                pickle.dump(big_probabilities, f)
+
+            with open(f"../pipeline/train_data/train_small_{num_samples}_{i}.pkl", "wb") as g:
+                pickle.dump(small_probabilities, g)
+
+            with open(f"../pipeline/train_data/indices_big_{num_samples}_{i}.pkl", "wb") as f:
+                pickle.dump(big_indices, f)
+
+            with open(f"../pipeline/train_data/indices_small_{num_samples}_{i}.pkl", "wb") as f:
+                pickle.dump(small_indices, f)
 
     return small_probabilities, big_probabilities, small_indices, big_indices
 
 
-if __name__ == "__main__":
-    print("  => GENERATING ALL DATA")
-    small_probs, big_probs, small_indices, big_indices = generateData(
-        TOKENIZED_DATA_PATH, SEQUENCE_LENGTH, NUM_SAMPLES, truncate=TRUNCATE, save=SAVE)
-    print(len(small_probs))
-    print(len(small_indices))
-    print(small_probs[0][0])
-    print(len(small_probs[0][0]))
+# if __name__ == "__main__":
+    # print("  => GENERATING ALL DATA")
+    # small_probs, big_probs, small_indices, big_indices = generateData(
+    #     TOKENIZED_DATA_PATH, SEQUENCE_LENGTH, NUM_SAMPLES, truncate=TRUNCATE, save=SAVE)
+    # print(len(small_probs))
+    # print(len(small_indices))
+    # print(small_probs[0][0])
+    # print(len(small_probs[0][0]))

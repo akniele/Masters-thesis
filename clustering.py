@@ -54,20 +54,20 @@ def find_optimal_n(feature_vector):
         )
     elbow = kl.elbow
 
-    # silhouette coefficient
-    silhouette_coefficients = []
-    calinski_harabasz = []
-    for k in range(2, 11):
-        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-        kmeans.fit(feature_vector)
-        score_silhouette = silhouette_score(feature_vector, kmeans.labels_)
-        silhouette_coefficients.append(score_silhouette)
-        score_calinski = calinski_harabasz_score(feature_vector, kmeans.labels_)
-        calinski_harabasz.append(score_calinski)
-    max_silhouette = np.argmax(silhouette_coefficients) +2
-    max_calinski = np.argmax(calinski_harabasz) +2
+    # # silhouette coefficient
+    # silhouette_coefficients = []
+    # calinski_harabasz = []
+    # for k in range(2, 11):
+    #     kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
+    #     kmeans.fit(feature_vector)
+    #     score_silhouette = silhouette_score(feature_vector, kmeans.labels_)
+    #     silhouette_coefficients.append(score_silhouette)
+    #     score_calinski = calinski_harabasz_score(feature_vector, kmeans.labels_)
+    #     calinski_harabasz.append(score_calinski)
+    # max_silhouette = np.argmax(silhouette_coefficients) +2
+    # max_calinski = np.argmax(calinski_harabasz) +2
 
-    return elbow, max_silhouette, max_calinski
+    return elbow #, max_silhouette, max_calinski
 
 
 """Check the distribution of cluster labels"""

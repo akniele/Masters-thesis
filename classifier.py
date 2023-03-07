@@ -9,12 +9,13 @@ class BertClassifier(nn.Module):
 
         super(BertClassifier, self).__init__()
 
-        self.embSize = 256
+        self.embSize = 256  # the embedding size (hidden size) has to be a multiple of the number of attention heads
 
-        conf = BertConfig(num_hidden_layers=2, vocab_size=512, hidden_size=self.embSize, num_attention_heads=8)
+        conf = BertConfig(num_hidden_layers=2, vocab_size=64, hidden_size=self.embSize, num_attention_heads=4)
         self.bert = BertModel(conf)
-        self.linear = nn.Linear(256, num_classes)
-        self.logsoftmax = nn.LogSoftmax(dim=1)
+        print(f"bert embeddings:\n{self.bert.embeddings}")
+        self.linear = nn.Linear(self.embSize, num_classes)
+        self.logsoftmax = nn.LogSoftmax(dim=-1)
 
         self.train_acc = list()
         self.train_loss = list()
