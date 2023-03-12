@@ -1,7 +1,7 @@
-from differenceMetrics import sort_probs
+from GetClusters.differenceMetrics import sort_probs
 import torch
 import pandas as pd
-from classifier import BertClassifier
+from ClassifierFiles.classifier import BertClassifier
 import numpy as np
 from tqdm import tqdm
 from scipy.spatial import distance  # distance.cityblock gives manhattan distance

@@ -1,3 +1,7 @@
+import pandas as pd
+import plotly.express as px
+from collections import defaultdict
+
 CLUSTER_TO_VISUALIZE = 1  # first check how many clusters were used for clustering algorithm
 SHEET_TO_VISUALIZE = 0  # there are 32 sheets
 
@@ -22,6 +26,7 @@ for i, sheets in enumerate(probs1[:1]):
 
 full_data = pd.DataFrame.from_dict(visualization)
 
-fig = px.line(full_data, x="token_id", y="probs", animation_frame="timestep", color="model", range_x=[0,29], range_y=[1e-7,1], log_y=True)
-fig["layout"].pop("updatemenus") # optional, drop animation buttons
+fig = px.line(full_data, x="token_id", y="probs", animation_frame="timestep", color="model", range_x=[0, 29],
+              range_y=[1e-7, 1], log_y=True)
+fig["layout"].pop("updatemenus")  # optional, drop animation buttons
 fig.show()

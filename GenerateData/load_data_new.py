@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(1, '../Non-Residual-GANN')
 from datasets import load_dataset, Dataset
 from SamplingComparissons import CompareModels
 from Utils import loadGenerator

@@ -17,25 +17,24 @@ import sys
 from tqdm import tqdm
 import pandas as pd
 
-from differenceMetrics import bucket_diff_top_p, bucket_diff_top_k, compare_topk_success, compare_topk_prob
-from differenceMetrics import compare_average_topk_len, entropy_difference
-from featureVector import create_bucket_feature_vector, create_feature_vector, scale_feature_vector
-from featureVector import create_and_save_scaled_feature_vector
-from clustering import k_means_clustering
-from clustering import find_optimal_n, label_distribution
-from clustering import agglomerative_clustering
+from GetClusters.differenceMetrics import bucket_diff_top_p, bucket_diff_top_k, compare_topk_success, compare_topk_prob
+from GetClusters.differenceMetrics import compare_average_topk_len, entropy_difference
+from GetClusters.featureVector import create_bucket_feature_vector, create_feature_vector, scale_feature_vector
+from GetClusters.featureVector import create_and_save_scaled_feature_vector
+from GetClusters.clustering import k_means_clustering
+from GetClusters.clustering import find_optimal_n, label_distribution
 
 sys.path.insert(1, '../Non-Residual-GANN')
-from load_data_new import generateData
-from get_means_from_training_data import get_mean_entropy_from_training_data
-from classifier import BertClassifier
-from trainClassifier import train
-from evaluateClassifier import evaluate
-from trainingDataClassifier import prepare_training_data
-from transformation import classifyProbabilityIntoFamily, create_prediction_data, transformProbabilities
-from transformation import trans0
-from transformation import probability_transformation
-from transformation import compare_distributions
+from GenerateData.load_data_new import generateData
+from Transformation.get_means_from_training_data import get_mean_entropy_from_training_data
+from ClassifierFiles.classifier import BertClassifier
+from ClassifierFiles.trainClassifier import train
+from ClassifierFiles.evaluateClassifier import evaluate
+from ClassifierFiles.trainingDataClassifier import prepare_training_data
+from Transformation.transformation import classifyProbabilityIntoFamily, create_prediction_data, transformProbabilities
+from Transformation.transformation import trans0
+from Transformation.transformation import probability_transformation
+from Transformation.transformation import compare_distributions
 
 
 if __name__ == "__main__":

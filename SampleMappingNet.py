@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(1, '../Non-Residual-GANN')
+
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset, Dataset

@@ -1,15 +1,14 @@
-from datasetTrain import Dataset
-
 import torch
 from torch import nn
 from torch.optim import Adam
 from tqdm import tqdm
 from collections import defaultdict
-from plot_acc_and_loss import acc_loss_plot
+import ClassifierFiles.datasetTrain as datasetTrain
+import ClassifierFiles.plot_acc_and_loss as plot_acc_and_loss
 
 
 def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_classes):
-    train, val = Dataset(train_data), Dataset(val_data)
+    train, val = datasetTrain.Dataset(train_data), datasetTrain.Dataset(val_data)
 
     train_dataloader = torch.utils.data.DataLoader(train, BATCH_SIZE, shuffle=True)
     val_dataloader = torch.utils.data.DataLoader(val, BATCH_SIZE)
@@ -97,4 +96,4 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
     acc_loss["val_accuracy"] = model.val_acc
     acc_loss["val_loss"] = model.val_loss
 
-    acc_loss_plot(acc_loss)  # create a plot with train and val accuracy and loss
+    plot_acc_and_loss.acc_loss_plot(acc_loss)  # create a plot with train and val accuracy and loss

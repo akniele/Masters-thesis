@@ -1,12 +1,11 @@
-from datasetTrain import Dataset
-from sklearn.metrics import classification_report
-from confusion_matrix import save_confusion_matrix_to_file
+import ClassifierFiles.datasetTrain as datasetTrain
+import ClassifierFiles.confusion_matrix as confusion_matrix
 
 import torch
 
 
 def evaluate(model, test_data, num_classes):
-    test = Dataset(test_data)
+    test = datasetTrain.Dataset(test_data)
 
     test_dataloader = torch.utils.data.DataLoader(test, batch_size=1)
 
@@ -41,6 +40,5 @@ def evaluate(model, test_data, num_classes):
 
     print(f'Test Accuracy: {total_acc_test / len(test_data): .3f}')
 
-    save_confusion_matrix_to_file(true_labels, pred_labels, num_classes)
-    #print(f'Classification report:\n{classification_report(true_labels, pred_labels)}')
+    confusion_matrix.save_confusion_matrix_to_file(true_labels, pred_labels, num_classes)
     
