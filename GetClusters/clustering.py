@@ -20,6 +20,7 @@ def agglomerative_clustering(feature_vector, n_clusters):
 
 
 def k_means_clustering(feature_vector, n_clusters):
+    print("  => GET CLUSTER LABELS")
     kmeans = KMeans(
             init="random",
             n_clusters=n_clusters,
@@ -37,6 +38,7 @@ def k_means_clustering(feature_vector, n_clusters):
 
 
 def find_optimal_n(feature_vector):
+    print("  => FINDING OPTIMAL NUMBER OF CLUSTERS")
     kmeans_kwargs = {
         "init": "random",
         "n_init": 10,
@@ -74,6 +76,7 @@ def find_optimal_n(feature_vector):
 
 
 def label_distribution(n_clusters, labels):
+    print("  => GET LABEL DISTRIBUTION")
     n_occurrences = []
     for i in range(n_clusters):
         count = np.count_nonzero(labels == i)

@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(1, '../Non-Residual-GANN')
+sys.path.insert(1, '../../Non-Residual-GANN')
 from datasets import load_dataset, Dataset
 from SamplingComparissons import CompareModels
 from Utils import loadGenerator
@@ -57,7 +57,7 @@ def generateData(tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUEN
     data.set_format("torch")
     loader = iter(torch.utils.data.DataLoader(data["data"], batch_size=1))  # added iter so it doesn't load the first data over and over
 
-    for i in tqdm.tqdm(range(10)):
+    for i in tqdm.tqdm(range(1)):
 
         #print(f"psutil before initializing the arrays: {psutil.virtual_memory()}")
         print("  => INITIALIZING ARRAYS")
@@ -92,7 +92,7 @@ def generateData(tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUEN
             return smallProb, bigProb
 
         index = 0
-        for example in loader:
+        for example in tqdm.tqdm(loader):
             if index == num_samples//10:
                 break
             inputIDs = (torch.tensor(example).to(DEVICE))  # size [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
@@ -118,16 +118,16 @@ def generateData(tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUEN
 
         if save:
             print("  => SAVING...")
-            with open(f"../pipeline/train_data/train_big_{num_samples}_{i}.pkl", "wb") as f:
+            with open(f"../pipeline/train_data/train_big_tmp_{num_samples}_{i}.pkl", "wb") as f:
                 pickle.dump(big_probabilities, f)
 
-            with open(f"../pipeline/train_data/train_small_{num_samples}_{i}.pkl", "wb") as g:
+            with open(f"../pipeline/train_data/train_small_tmp_{num_samples}_{i}.pkl", "wb") as g:
                 pickle.dump(small_probabilities, g)
 
-            with open(f"../pipeline/train_data/indices_big_{num_samples}_{i}.pkl", "wb") as f:
+            with open(f"../pipeline/train_data/indices_big_tmp_{num_samples}_{i}.pkl", "wb") as f:
                 pickle.dump(big_indices, f)
 
-            with open(f"../pipeline/train_data/indices_small_{num_samples}_{i}.pkl", "wb") as f:
+            with open(f"../pipeline/train_data/indices_small_tmp_{num_samples}_{i}.pkl", "wb") as f:
                 pickle.dump(small_indices, f)
 
     return small_probabilities, big_probabilities, small_indices, big_indices

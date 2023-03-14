@@ -38,7 +38,21 @@ def evaluate(model, test_data, num_classes):
             acc = (output.argmax(dim=1) == test_label).sum().item()
             total_acc_test += acc
 
-    print(f'Test Accuracy: {total_acc_test / len(test_data): .3f}')
+    print(f'Test Accuracy: {total_acc_test / (len(test_data)*64): .3f}')
+
+    first_class = len([x for x in true_labels if x == 0])
+    second_class = len([x for x in true_labels if x == 1])
+    third_class = len([x for x in true_labels if x == 2])
+    print(f" num true labels: {first_class, second_class, third_class}")
+
+    first_class = len([x for x in pred_labels if x == 0])
+    second_class = len([x for x in pred_labels if x == 1])
+    third_class = len([x for x in pred_labels if x == 2])
+    print(f" num pred labels: {first_class, second_class, third_class}")
+
+    assert len(pred_labels) == len(true_labels)
 
     confusion_matrix.save_confusion_matrix_to_file(true_labels, pred_labels, num_classes)
+
+    return pred_labels, true_labels
     

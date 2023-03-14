@@ -32,4 +32,4 @@ def save_confusion_matrix_to_file(true, pred, num_classes):
     plt.savefig("matrix.png")
 
     # get recall, precision, etc.
-    print(classification_report(true, pred, digits=3))
+    print(classification_report(true, pred, digits=4))

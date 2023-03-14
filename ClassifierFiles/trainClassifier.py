@@ -33,6 +33,7 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
                 train_label = train_label.to(device)
                 # print(f"train label size: {train_label.size()}")
                 input_embeds = train_input.to(device)
+                #print(f"size input embeds: {input_embeds.size()}")
                 # print(f"input embeds size: {input_embeds.size()}")
 
                 output = model(inputs_embeds=input_embeds)
@@ -86,9 +87,9 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
             model.val_loss.append(total_loss_val / len(val_data))
 
         print(
-            f'Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | Train Accuracy: '
+            f'Epochs: {epoch_num} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | Train Accuracy: '
             f'{total_acc_train / (len(train_data)*64): .4f} | Val Loss: {total_loss_val / (len(val_data)*64): .4f} '
-            f'| Val Accuracy: {total_acc_val / (len(val_data)*64): .4f}')
+            f'| Val Accuracy: {total_acc_val / (len(val_data)*64): .4f}\n\n')
 
     acc_loss = defaultdict()
     acc_loss["train_accuracy"] = model.train_acc

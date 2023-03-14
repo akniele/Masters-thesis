@@ -38,8 +38,24 @@ def scale_feature_vector(feature_vector):
     return scaled_features
 
 
-def create_and_save_scaled_feature_vector(functions, probs0, probs1, num_sheets, index):
-    feature_vector = create_feature_vector(functions, probs0, probs1, num_sheets)
-    scaled_feature_vector = scale_feature_vector(feature_vector)
-    with open(f"train_data/scaled_features_{index}.pkl", "wb") as h:
-        pickle.dump(scaled_feature_vector, h)
+def create_and_save_scaled_feature_vector(functions, num_sheets):
+    for i in range(9):
+        probs0 = pickle.load(open(f"train_data/train_small_100000_{i}.pkl", "rb"))
+        probs1 = pickle.load(open(f"train_data/train_big_100000_{i}.pkl", "rb"))
+        feature_vector = create_feature_vector(functions, probs0, probs1, num_sheets)
+        scaled_feature_vector = scale_feature_vector(feature_vector)
+        function_names = "_".join([function.__name__ for function in functions])
+        with open(f"train_data/scaled_features_{i}_{function_names}.pkl", "wb") as h:
+            pickle.dump(scaled_feature_vector, h)
+
+
+def load_scaled_feature_vector(num_sheets, num_features):  # num features depends on the number of feature functions
+                                                           # used, and on how many features they each have
+    scaled_features = np.zeros((64*num_sheets*9, num_features))
+
+    for i in range(9):
+        with open(f"train_data/scaled_features_{i}.pkl", "rb") as f:
+            feature = pickle.load(f)
+        scaled_features[i*(64*num_sheets):(i+1)*(64*num_sheets)] = feature
+
+    return scaled_features
