@@ -58,8 +58,8 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
 
                 batches.set_postfix(loss=batch_loss.item() / (BATCH_SIZE*64), accuracy=(acc/(BATCH_SIZE*64)))
 
-        model.train_acc.append(total_acc_train / len(train_data))
-        model.train_loss.append(total_loss_train / len(train_data))
+        model.train_acc.append(total_acc_train / (len(train_data)*64))
+        model.train_loss.append(total_loss_train / (len(train_data)*64))
         total_acc_val = 0
         total_loss_val = 0
 
@@ -83,8 +83,8 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
 
                     val_batches.set_postfix(loss=batch_loss.item() / (BATCH_SIZE*64), accuracy=(acc / (BATCH_SIZE * 64)))
 
-            model.val_acc.append(total_acc_val / len(val_data))
-            model.val_loss.append(total_loss_val / len(val_data))
+            model.val_acc.append(total_acc_val / (len(val_data)*64))
+            model.val_loss.append(total_loss_val / (len(val_data)*64))
 
         print(
             f'Epochs: {epoch_num} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | Train Accuracy: '

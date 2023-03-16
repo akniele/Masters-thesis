@@ -18,8 +18,11 @@ import numpy as np
 from GetClusters.clustering import k_means_clustering
 from GetClusters.clustering import find_optimal_n, label_distribution
 from GetClusters.differenceMetrics import entropy_difference
-from GetClusters.featureVector import load_scaled_feature_vector
-from GetClusters.featureVector import create_and_save_scaled_feature_vector
+from GetClusters.differenceMetrics import bucket_diff_top_k
+from GetClusters.featureVector import load_feature_vector
+from Transformation.get_means_from_training_data import get_means_from_training_data
+from Transformation.fill_up_distributions import fill_distribution
+from GetClusters.featureVector import create_and_save_feature_vector
 from ClassifierFiles import train_and_evaluate_classifier
 
 sys.path.insert(1, '../Non-Residual-GANN')
@@ -56,24 +59,24 @@ if __name__ == "__main__":
     #
     #     """create scaled feature vector"""
 
-    # bucket_diff_top_k,
-    # function_list = [entropy_difference]  # difference metrics to use for creating feature vector
+
+    function_list = [bucket_diff_top_k, entropy_difference]  # difference metrics to use for creating feature vector
     #
-    # create_and_save_scaled_feature_vector(function_list, NUM_TRAIN_SHEETS)
+    create_and_save_feature_vector(function_list, NUM_TRAIN_SHEETS, filled=True)
 
     # --------------------------------------------------------------------------------------#
-    scaled_features = load_scaled_feature_vector(NUM_TRAIN_SHEETS, num_features=4)
+    # features = load_feature_vector(functions=function_list, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=False)
+    #
+    # print(f"Shape of features: {features.shape}")
+    # print(features[:3])
+    # print(features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
+    #
+    # scaled_features = load_feature_vector(functions=function_list, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
+    #
+    # print(f"Shape of scaled features: {scaled_features.shape}")
+    # print(scaled_features[:3])
+    # print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
 
-    print(f"Shape of scaled features: {scaled_features.shape}")
-    print(f"[0] of scaled_features: {scaled_features[0]}")
-
-    print(scaled_features[:3])
-    print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
-
-    # print(len(np.unique(scaled_features))/4)
-    # print(len(scaled_features))
-    # # check for duplicates (if True, there are duplicates)
-    # print((len(np.unique(scaled_features))/4) < len(scaled_features))
     # ---------------------------------------------------------------------------------------#
 
 
@@ -83,15 +86,20 @@ if __name__ == "__main__":
     # elbow = find_optimal_n(scaled_features)
 
     # ---------------------------------------------------------------------#
+
+    # N_CLUSTERS = 3
     #
-    N_CLUSTERS = 3
-
-    labels = k_means_clustering(scaled_features, N_CLUSTERS)
-
-    label_distribution = label_distribution(N_CLUSTERS, labels)
-
-    print(f"label distribution: {label_distribution}")
-
+    # labels = k_means_clustering(scaled_features, N_CLUSTERS)
+    #
+    # label_distribution = label_distribution(N_CLUSTERS, labels)
+    #
+    # print(f"label distribution: {label_distribution}")
+    #
+    # dict_means = get_means_from_training_data(functions=function_list, num_features=4, num_sheets=NUM_TRAIN_SHEETS,
+    #                                           labels=labels)
+    #
+    # for key, value in dict_means.items():
+    #     print(f"key: {key}\t value:{value}")
 
     # ------------------------------------------------------------------------#
 
@@ -120,13 +128,13 @@ if __name__ == "__main__":
 
     # -------------------------------------------------------------------------------#
 
-    NUM_CLASSES = 3
-    BATCH_SIZE = 16
-    EPOCHS = 100
-    LR = 5e-5
-
-    pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
-        NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS)
+    # NUM_CLASSES = 3
+    # BATCH_SIZE = 16
+    # EPOCHS = 60
+    # LR = 5e-5
+    #
+    # pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
+    #     NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS)
 
     # ------------------------------------------------------------------------------------#
 

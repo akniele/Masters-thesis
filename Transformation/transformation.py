@@ -295,12 +295,13 @@ def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchan
     return (new_entropy - entropy_small)**2
 
 
-def trans1(bigprobs, smallprobs):
+def trans1(bigprobs, smallprobs, mean_entropy):
     # change the entropy of the big probability distribution to make it more similar to the entropy of the smaller model
     p = bigprobs
     p = np.expand_dims(p, 1)  # unsqueeze p (optimizer wants (n,1))
 
-    small_entropy = 4.361379
+    small_entropy = mean_entropy
+    #4.361379
     #entropy(smallprobs)
 
     solution = minimize(fun=f, x0=1, args=(p, small_entropy)) # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
@@ -312,9 +313,11 @@ def trans1(bigprobs, smallprobs):
 
 if __name__ == "__main__":
 
-    NUM_TRAIN_SHEETS = 20
-    NUM_TEST_SHEETS = 12
 
+
+    # NUM_TRAIN_SHEETS = 20
+    # NUM_TEST_SHEETS = 12
+    #
     """Load data"""
     # data
     probs0 = pickle.load(open("../train_data/train_small_tmp_1000_0.pkl", "rb"))
@@ -322,37 +325,46 @@ if __name__ == "__main__":
     probs0 = probs0.detach().numpy()
     probs1 = probs1.detach().numpy()
 
-    """transform big probs to be more similar to small probs"""
-
-    transformed_probs = probability_transformation(probs1[:20, :, :], probs0[:20, :, :])
-    print(transformed_probs.shape)
-
-    total_weighted_changed, total_weighted_unchanged = compare_distance(transformed_probs, probs0[:20, :, :], probs1[:20, :, :])
-
-    print(f"standard deviation of weighted Manhattan distances after transformation: {np.std(total_weighted_changed)}")
-    print(f"standard deviation of weighted Manhattan distances without transformation: {np.std(total_weighted_unchanged)}")
-
-    print(f"mean of weighted Manhattan distances after transformation: {np.mean(total_weighted_changed)}")
-    print(
-        f"mean of weighted Manhattan distances without transformation: {np.mean(total_weighted_unchanged)}")
+    print(f"shape probs: {probs0.shape}")
+    print(f"entropy small model: {entropy(probs0[0][0])}")
+    print(f"entropy big model: {entropy(probs1[0][0])}")
+    trans_p = trans1(probs1[0][0], probs0[0][0], 0.0210886001586914)
+    print(entropy(trans_p))
 
 
-    # print(f"sum of Manhattan Distance after transformation: {total_changed}")
-    # print(f"sum of Manhattan Distance without transformation: {total_unchanged}")
 
-    print(f"sum of weighted Manhattan Distance after transformation: {sum(total_weighted_changed)}")
-    print(f"sum of weighted Manhattan Distance without: {sum(total_weighted_unchanged)}")
-
-    #transformed_probs = probability_transformation(probs1, probs0)
-
-    improvement_weighted = compare_distributions(transformed_probs, probs0[:20, :, :], probs1[:20, :, :])
-
-    print(f" Using the Manhattan distance, % "  #{improvement_manhattan * 100}
-          f"of the transformed distributions are closer to the target distribution.\nFor the weighted Manhattan "
-          f"distance, the score is {improvement_weighted * 100}%.")
-
-    improvement_manhattan_128, improvement_weighted_128 = sanity_check_distance_metrics(transformed_probs,
-                                                                                        probs0[:20, :, :], probs1[:20, :, :])
-    print(f" Using the cutoff Manhattan distance, {improvement_manhattan_128 * 100}% "
-          f"of the transformed distributions are closer to the target distribution.\nFor the cutoff weighted Manhattan "
-          f"distance, the score is {improvement_weighted_128 * 100}%.")
+    #
+    # """transform big probs to be more similar to small probs"""
+    #
+    # transformed_probs = probability_transformation(probs1[:20, :, :], probs0[:20, :, :])
+    # print(transformed_probs.shape)
+    #
+    # total_weighted_changed, total_weighted_unchanged = compare_distance(transformed_probs, probs0[:20, :, :], probs1[:20, :, :])
+    #
+    # print(f"standard deviation of weighted Manhattan distances after transformation: {np.std(total_weighted_changed)}")
+    # print(f"standard deviation of weighted Manhattan distances without transformation: {np.std(total_weighted_unchanged)}")
+    #
+    # print(f"mean of weighted Manhattan distances after transformation: {np.mean(total_weighted_changed)}")
+    # print(
+    #     f"mean of weighted Manhattan distances without transformation: {np.mean(total_weighted_unchanged)}")
+    #
+    #
+    # # print(f"sum of Manhattan Distance after transformation: {total_changed}")
+    # # print(f"sum of Manhattan Distance without transformation: {total_unchanged}")
+    #
+    # print(f"sum of weighted Manhattan Distance after transformation: {sum(total_weighted_changed)}")
+    # print(f"sum of weighted Manhattan Distance without: {sum(total_weighted_unchanged)}")
+    #
+    # #transformed_probs = probability_transformation(probs1, probs0)
+    #
+    # improvement_weighted = compare_distributions(transformed_probs, probs0[:20, :, :], probs1[:20, :, :])
+    #
+    # print(f" Using the Manhattan distance, % "  #{improvement_manhattan * 100}
+    #       f"of the transformed distributions are closer to the target distribution.\nFor the weighted Manhattan "
+    #       f"distance, the score is {improvement_weighted * 100}%.")
+    #
+    # improvement_manhattan_128, improvement_weighted_128 = sanity_check_distance_metrics(transformed_probs,
+    #                                                                                     probs0[:20, :, :], probs1[:20, :, :])
+    # print(f" Using the cutoff Manhattan distance, {improvement_manhattan_128 * 100}% "
+    #       f"of the transformed distributions are closer to the target distribution.\nFor the cutoff weighted Manhattan "
+    #       f"distance, the score is {improvement_weighted_128 * 100}%.")

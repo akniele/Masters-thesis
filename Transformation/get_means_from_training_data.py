@@ -1,23 +1,64 @@
 from scipy.stats import entropy
 import numpy as np
+import pickle
+import sys
+sys.path.insert(1, '../GetClusters')
+import config
+from GetClusters.featureVector import load_feature_vector
+from GetClusters.differenceMetrics import entropy_difference
+from GetClusters.differenceMetrics import bucket_diff_top_k
+
+# TODO: the parameter associated with bucket_diff_top_k might change, this can't stay hard-coded!
 
 
-def get_mean_entropy_from_training_data(num_sheets, probs0, labels, num_clusters):
-    entropies = dict()
-    formatted_data = []
-    for i, sheets in enumerate(probs0[:num_sheets]):
-        sequence = []
-        for j, samples in enumerate(sheets):
-            sequence.append(samples)
-        formatted_data.append(sequence)
+def get_means_from_training_data(functions, num_features, num_sheets, labels=None):
+    mean_dict = dict()
 
-    for k in range(num_clusters):
-        entropies[f"entropy_{k}"] = []
+    feature_vector = load_feature_vector(functions=functions, num_features=num_features, num_sheets=num_sheets,
+                                         scaled=False)  # num_sheets it the number of samples per file (usually 10000)
 
-    for i in range(len(formatted_data)):
-        for j in range(len(formatted_data[0])):
-            entropies[f"entropy_{labels[i * 64 + j]}"].append(entropy(formatted_data[i][j]))
+    if labels is not None:
+        labels_array = np.array(labels)
+        unique_labels = np.unique(labels_array)  # get number of unique elements in labels array
 
-    entropy_means = [np.mean(entropies[f'entropy{i}']) for i in range(len(entropies.keys()))]
+        completed_columns = 0
+        columns_to_add = 0
+        for function in functions:
+            columns_to_add += config.function_feature_dict[f"{function.__name__}"]
+            for i in range(config.function_feature_dict[f"{function.__name__}"]):
+                for label in unique_labels:  # loop with range number of unique elements
+                    bool_labels = labels_array == label  # first turn labels into booleans
+                    mean_feature = np.mean(feature_vector[:, i+completed_columns], axis=0, where=bool_labels)  # then for each one, calculate the mean separately
+                    mean_dict[f"{function.__name__}_{i}_{label}"] = mean_feature
+            completed_columns += columns_to_add
+            columns_to_add = 0
+    else:
+        for function in functions:
+            for i in range(config.function_feature_dict[f"{function.__name__}"]):
+                mean_feature = np.mean(feature_vector[:, i])
+                mean_dict[f"{function.__name__}_{i}"] = mean_feature
 
-    return entropy_means  # returns a dictionary with the entropies, the keys are the different clusters
+    return mean_dict
+
+
+if __name__ == "__main__":
+    print(config.function_feature_dict)
+    # feature_vector = np.array([[1, 3, 4, 5],
+    #                            [6, 3, 6, 2],
+    #                            [7, 6, 1, 4],
+    #                            [3, 2, 4, 1]])
+    #
+    # print(f"feature_vector shape: {feature_vector.shape}")
+    # labels_matrix = np.array([1,
+    #                    0,
+    #                    0,
+    #                    1])
+    #
+    # function_list_1 = [bucket_diff_top_k, entropy_difference]
+    #
+    # dict_means = get_means_from_training_data(num_features=4, num_sheets=10000, functions=function_list_1,
+    #                                           labels=labels_matrix)
+    #
+    # for key, value in dict_means.items():
+    #     print(key, value)
+
