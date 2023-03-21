@@ -296,6 +296,12 @@ def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchan
 
 
 def trans1(bigprobs, smallprobs, mean_entropy):
+    """
+    :param bigprobs: a single probability distribution from the big model
+    :param smallprobs: a single probability distribution from the small model
+    :param mean_entropy: the mean entropy of all distributions from the small model (from training data)
+    :return: the probability distribution from the big model, transformed to approximate the entropy of the small model
+    """
     # change the entropy of the big probability distribution to make it more similar to the entropy of the smaller model
     p = bigprobs
     p = np.expand_dims(p, 1)  # unsqueeze p (optimizer wants (n,1))

@@ -13,6 +13,7 @@ import pickle
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 import numpy as np
+from tqdm import tqdm
 
 
 from GetClusters.clustering import k_means_clustering
@@ -24,6 +25,8 @@ from Transformation.get_means_from_training_data import get_means_from_training_
 from Transformation.fill_up_distributions import fill_distribution
 from GetClusters.featureVector import create_and_save_feature_vector
 from ClassifierFiles import train_and_evaluate_classifier
+from GetClusters.featureVector import fill_all_distributions_and_create_features
+
 
 sys.path.insert(1, '../Non-Residual-GANN')
 # from GenerateData.load_data_new import generateData
@@ -42,27 +45,50 @@ if __name__ == "__main__":
     # small_probs, big_probs, small_indices_final, big_indices_final = generateData(
     #          num_samples=100000, truncate=True, topk=256, save=True)
 
-    # for i in tqdm(range(9)):
-    #     print("  => LOADING DATA")
-    #
-    #     with open(f"train_data/train_big_100000_{i}.pkl", "rb") as f:
-    #         probs1 = pickle.load(f)
-    #
-    #     probs1 = probs1.numpy()
-    #
-    #     with open(f"train_data/train_small_100000_{i}.pkl", "rb") as g:
-    #         probs0 = pickle.load(g)
-    #
-    #     probs0 = probs0.numpy()
+    for i in tqdm(range(1)):
+        print("  => LOADING DATA")
+        print(i)
+
+        with open(f"train_data/train_big_100000_{i}.pkl", "rb") as f:
+            probs1 = pickle.load(f)
+
+        probs1 = probs1.numpy()
+
+        with open(f"train_data/train_small_100000_{i}.pkl", "rb") as g:
+            probs0 = pickle.load(g)
+
+        probs0 = probs0.numpy()
+
+        with open(f"train_data/indices_small_100000_{i}.pkl", "rb") as g:
+            indices0 = pickle.load(g)
+
+        indices0 = indices0.numpy()
+
+        with open(f"train_data/indices_big_100000_{i}.pkl", "rb") as g:
+            indices1 = pickle.load(g)
+
+        indices1 = indices1.numpy()
+
+        functions = []
+
+        big_sorted, small_sorted = fill_all_distributions_and_create_features(
+            probs0[:1000, :, :], probs1[:1000, :, :], indices0[:1000, :, :], indices1[:1000, :, :], functions,
+            num_features=1, topk=256)
+
+        print(big_sorted.shape)
+        print(small_sorted.shape)
+        print(big_sorted[0][0][:25])
+        print(small_sorted[0][0][:25])
+
     #
     #     print("  => LOADING FEATURE VECTORS")
     #
     #     """create scaled feature vector"""
 
 
-    function_list = [bucket_diff_top_k, entropy_difference]  # difference metrics to use for creating feature vector
-    #
-    create_and_save_feature_vector(function_list, NUM_TRAIN_SHEETS, filled=True)
+    # function_list = [bucket_diff_top_k, entropy_difference]  # difference metrics to use for creating feature vector
+    # #
+    # create_and_save_feature_vector(function_list, NUM_TRAIN_SHEETS, filled=True)
 
     # --------------------------------------------------------------------------------------#
     # features = load_feature_vector(functions=function_list, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=False)

@@ -3,7 +3,9 @@ import pandas as pd
 import torch
 from datasets import load_dataset, Dataset
 #
-# data = pickle.load(open("../train_data/train_big_100000_0.pkl", "rb"))
+data = pickle.load(open("../train_data/train_big.pkl", "rb"))
+
+print(data.shape)
 # #data2 = pickle.load(open("../train_data/train_big_100000_1.pkl", "rb"))
 #
 # data3 = pickle.load(open("../train_data/train_big_tmp_1000_0.pkl", "rb"))

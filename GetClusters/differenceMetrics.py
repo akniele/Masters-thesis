@@ -26,7 +26,7 @@ def entropy_difference(probs0, probs1):
 """Difference in probability per bucket"""
 
 
-def sort_probs(big_probs, small_probs, sort_by=0):  # sorts the probabilities by the big probabilities
+def not_used_sort_probs(big_probs, small_probs, sort_by=0):  # sorts the probabilities by the big probabilities
     small_sample = small_probs.copy()  # create copies of the distributions
     big_sample = big_probs.copy()
 
@@ -39,7 +39,16 @@ def sort_probs(big_probs, small_probs, sort_by=0):  # sorts the probabilities by
     return big_sorted, small_sorted
 
 
-def bucket_diff_top_k(probs0, probs1, number_of_buckets=None, indices=None):
+def sort_probs(big_probs, small_probs):
+    indices = np.argsort(big_probs, axis=-1)
+    indices_reverse = np.flip(indices, axis=-1)
+    big_probs_sorted = np.take_along_axis(big_probs, indices_reverse, axis=-1)
+    small_probs_sorted = np.take_along_axis(small_probs, indices_reverse, axis=-1)
+
+    return big_probs_sorted, small_probs_sorted
+
+
+def not_used_bucket_diff_top_k(probs0, probs1, number_of_buckets=None, indices=None):
     if indices is None:
         indices = [0, 10, 35]
     if number_of_buckets is None:
@@ -58,6 +67,20 @@ def bucket_diff_top_k(probs0, probs1, number_of_buckets=None, indices=None):
         bucket_diff.append(difference)
 
     return bucket_diff  # returns the probability of buckets of specified size k each
+
+
+def bucket_diff_top_k(probs0, probs1, indices=None):
+    if indices is None:
+        indices = [10, 35]
+
+    big_sample_sorted, small_sample_sorted = sort_probs(probs1, probs0)
+    split_probs_big = np.split(big_sample_sorted, indices, axis=-1)
+    split_probs_small = np.split(small_sample_sorted, indices, axis=-1)
+
+    bucket_diffs = np.zeros((probs0.shape[0], probs0.shape[1], len(indices)+1))
+    for i in range(len(split_probs_big)):
+        bucket_diffs =
+    # TODO: use np.insert to insert the summed up differences into bucket_diffs!
 
 
 """Is the correct token in the top k?"""
