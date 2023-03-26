@@ -71,14 +71,15 @@ if __name__ == "__main__":
 
         functions = []
 
-        big_sorted, small_sorted = fill_all_distributions_and_create_features(
-            probs0[:1000, :, :], probs1[:1000, :, :], indices0[:1000, :, :], indices1[:1000, :, :], functions,
+        bucket_diffs = fill_all_distributions_and_create_features(
+            probs0[:500, :, :], probs1[:500, :, :], indices0[:500, :, :], indices1[:500, :, :], functions,
             num_features=1, topk=256)
 
-        print(big_sorted.shape)
-        print(small_sorted.shape)
-        print(big_sorted[0][0][:25])
-        print(small_sorted[0][0][:25])
+        print(bucket_diffs.shape)
+        print(bucket_diffs[:, :, :1].shape)
+        print(np.mean(bucket_diffs[:, :, 2:3]))
+
+        #print(np.sum(probs1[0][0]) - np.sum(probs0[0][0]))
 
     #
     #     print("  => LOADING FEATURE VECTORS")

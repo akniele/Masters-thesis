@@ -12,7 +12,7 @@ sys.path.append('../GetClusters')
 from differenceMetrics import sort_probs
 #from ClassifierFiles.classifier import BertClassifier
 from scipy.stats import entropy # kl-divergence/relative entropy if optional parameter qk is given, else calculate Shannon entropy
-
+from fill_up_distributions import fill_multiple_distributions
 
 def create_prediction_data(probs1):  # held out data that has not been used to create features
     predict_data = []
@@ -223,7 +223,7 @@ def probability_transformation(big_probs, small_probs):
 """
 
 
-def trans0(bigprobs):
+def not_used_trans0(bigprobs):
     number_of_buckets = 3
     indices = [0, 10, 35, len(bigprobs)]
     bucket_probs = [-0.167, 0.0097, 0.1573]
@@ -317,8 +317,96 @@ def trans1(bigprobs, smallprobs, mean_entropy):
     return transformed_p  # return the big model's probs, transformed to have the same entropy as the small model's probs
 
 
-if __name__ == "__main__":
+def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
+    sorted_indices = bigprobs.argsort()[:, :, ::-1]
+
+    print(f"bucket indices: {bucket_indices}")
+
+    depth = np.arange(len(bigprobs))
+    depth = np.expand_dims(depth, 1)
+    depth = np.expand_dims(depth, 2)
+    depth = np.broadcast_to(depth, bigprobs.shape)
+
+    rows = np.arange(bigprobs.shape[1])
+    rows = np.expand_dims(rows, 1)
+    rows = np.broadcast_to(rows, bigprobs.shape)
+
+    sorted_big_probs = bigprobs[depth, rows, sorted_indices]
+
+    print(f"sum first distribution: {sum(sorted_big_probs[0][0])}")
+
+    del bigprobs
+
+    current_bucket_probs = np.ones((sorted_big_probs.shape[0], sorted_big_probs.shape[1], len(bucket_indices)-1))
+
+    for i, index in enumerate(bucket_indices[:-1]):  # get current bucket probabilities
+        current_bucket_probs[:, :, i] = np.sum(sorted_big_probs[:, :, index:bucket_indices[i + 1]], -1)
+
+    print(f"current bucket probs: {current_bucket_probs[:1, :1, :]}")
+
+    new_bucket_trans = current_bucket_probs + mean_bucket_trans  # add up current bucket probs and transformations from train data
+
+    print(f"new bucket trans: {new_bucket_trans[:1, :1, :]}")
+
+    min_cols = np.amin(new_bucket_trans, axis=-1)  # get min bucket prob
+
+    output = min_cols < 0  # create boolean mask, True if there's a bucket prob < 0, else False
+
+    print(f"output: {output[:1, :1]}")
+
+    def add_min_and_normalize(x):  # called if there's a bucket prob < 0, adds this prob to all probs, then normalizes
+        x2 = x + np.expand_dims(abs(np.min(x, axis=-1)), -1)
+        return x2 / np.expand_dims(np.sum(x2, axis=-1), -1)
+
+    def normalize(x):  # normalizes the probabilities (squeezes them between 0 and 1)
+        return x / np.expand_dims(np.sum(x, axis=-1), -1)
+
+    new_bucket_trans[output, :] = add_min_and_normalize(new_bucket_trans[output, :])  # apply add_min_and_normalize to rows with bucket prob < 0
+    new_bucket_trans[~output, :] = normalize(new_bucket_trans[~output, :])  # apply normalize function to rows without bucket prob < 0
+
+    target_transformation = new_bucket_trans - current_bucket_probs # get final bucket transformation, i.e. how much to add / subtract from each bucket after normalization
+
+    print(f"target transformation: {target_transformation[:1, :1, :]}")
+
+    for i, index in enumerate(bucket_indices[:-1]):  # get current bucket probabilities
+        sorted_big_probs[:, :, index:bucket_indices[i+1]] = sorted_big_probs[:, :, index:bucket_indices[i + 1]] + \
+                                                     np.expand_dims(target_transformation[:, :, i] /
+                                                                    (bucket_indices[i + 1] - index), -1)
+
+    final_probs = sorted_big_probs[depth, rows, sorted_indices]  # unsort the probabilities
+
+    return final_probs
+
+
+if __name__ == "__main__":
+    # f = lambda x: torch.tensor(x, dtype=torch.float32)
+    #
+    # unchanged = f([0.3, 0.2, 0.5])
+    # print("Unchanged", unchanged)
+    #
+    # transformation = f([-.2, 0.3, -0.3])
+    # print("Transformation", transformation)
+    #
+    # actual_trans = trans_0(unchanged, transformation, indices=[1, 4])
+
+    # arr = np.array([[[0.3, 0.3, 0.4],
+    #                  [0.3, 0.9, 0.4],
+    #                  [0.1, 0.7, 0.4]],
+    #
+    #                 [[0.3, 0.2, 0.9],
+    #                  [0.1, 0.1, 0.8],
+    #                  [0.3, 0.2, 0.5]]])
+    #
+    # mean_bucket_trans = np.array([-0.2, 0.4])
+    # mean_bucket_trans = np.expand_dims(mean_bucket_trans, 0)
+    # mean_bucket_trans = np.expand_dims(mean_bucket_trans, 0)
+    #
+    # indices = [0, 1, 3]
+    #
+    # target_probs = trans_0(arr, mean_bucket_trans, indices)
+    #
+    # print(target_probs)
 
 
     # NUM_TRAIN_SHEETS = 20
@@ -326,16 +414,28 @@ if __name__ == "__main__":
     #
     """Load data"""
     # data
-    probs0 = pickle.load(open("../train_data/train_small_tmp_1000_0.pkl", "rb"))
-    probs1 = pickle.load(open("../train_data/train_big_tmp_1000_0.pkl", "rb"))
-    probs0 = probs0.detach().numpy()
+    probs1 = pickle.load(open("../train_data/train_big_100000_0.pkl", "rb"))
+    indices = pickle.load(open("../train_data/indices_big_100000_0.pkl", "rb"))
     probs1 = probs1.detach().numpy()
+    indices = indices.detach().numpy()
 
-    print(f"shape probs: {probs0.shape}")
-    print(f"entropy small model: {entropy(probs0[0][0])}")
-    print(f"entropy big model: {entropy(probs1[0][0])}")
-    trans_p = trans1(probs1[0][0], probs0[0][0], 0.0210886001586914)
-    print(entropy(trans_p))
+    print(f"shape probs: {probs1.shape}")
+
+    probs1 = fill_multiple_distributions(probs1[:500], indices[:500], topk=256)
+
+    mean_bucket_trans = np.array([[[-0.2, 0.5, 0.4]]])
+
+    bucket_indices = [0, 20, 50, probs1.shape[-1]]
+
+    trans_probs = trans_0(probs1, mean_bucket_trans, bucket_indices)
+
+    print(trans_probs.shape)
+    print(trans_probs[:1, :, :])
+
+    # print(f"entropy small model: {entropy(probs0[0][0])}")
+    # print(f"entropy big model: {entropy(probs1[0][0])}")
+    # trans_p = trans1(probs1[0][0], probs0[0][0], 0.0210886001586914)
+    # print(entropy(trans_p))
 
 
 

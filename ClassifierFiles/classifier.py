@@ -23,7 +23,8 @@ class BertClassifier(nn.Module):
         self.val_loss = list()
 
     def forward(self, inputs_embeds):
-        output, _ = self.bert(inputs_embeds=inputs_embeds, return_dict=False)
+        right_shape = nn.Linear(inputs_embeds, self.embSize)
+        output, _ = self.bert(inputs_embeds=right_shape, return_dict=False)
         linear_output = self.linear(output)
         final_layer = self.logsoftmax(linear_output)
         return final_layer

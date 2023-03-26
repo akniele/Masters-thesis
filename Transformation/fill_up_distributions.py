@@ -57,7 +57,19 @@ def not_used_fill_multiple_distribution(distributions, indices, topk=256):
 
 
 def fill_multiple_distributions(distributions, indices, topk=256):
-    new_probs = np.zeros((distributions.shape[0], distributions.shape[1], VOCAB_LENGTH))
+    current_sum = np.sum(distributions, axis=-1)
+
+    needed_sum = 1 - current_sum
+
+    num_probs_to_fill = VOCAB_LENGTH - topk
+
+    prop_to_fill_per_element = needed_sum / num_probs_to_fill
+
+    prop_to_fill_per_element = np.expand_dims(prop_to_fill_per_element, -1)
+
+    new_probs = np.full((distributions.shape[0], distributions.shape[1], VOCAB_LENGTH), prop_to_fill_per_element)
+
+
     indices = indices.astype(int)
 
     depth = np.arange(len(distributions))

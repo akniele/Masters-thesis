@@ -133,6 +133,8 @@ def fill_all_distributions_and_create_features(probs0, probs1, indices0, indices
     filled_distr_small = fill_multiple_distributions(probs0, indices0, topk=256)
     filled_distr_big = fill_multiple_distributions(probs1, indices1, topk=256)
 
+    print(f"shape filled_distr_small: {filled_distr_small.shape}")
+
     print("  => DONE FILLING DISTRIBUTIONS")
     # end = time.time()
     # diff = end - start
@@ -148,10 +150,12 @@ def fill_all_distributions_and_create_features(probs0, probs1, indices0, indices
     #         tmp_array[i][j] = tmp_features
 
     print("  => CREATING FEATURE VECTORS")
-    big_sorted, small_sorted = sort_probs(filled_distr_big, filled_distr_small)
+
+    bucket_diffs = bucket_diff_top_k(filled_distr_small, filled_distr_big, indices=None)
+    #big_sorted, small_sorted = sort_probs(filled_distr_big, filled_distr_small)
     #feature_vector = get_entropy_feature(filled_distr_small, filled_distr_big)   #create_feature_vector()
 
-    return big_sorted, small_sorted
+    return bucket_diffs
 
 
 if __name__ == "__main__":
