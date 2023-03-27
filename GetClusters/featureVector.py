@@ -43,14 +43,6 @@ def create_feature_vector(functions, probs0, probs1, num_sheets):
     return np.array(feature_vector, dtype=float)
 
 
-def get_entropy_feature(probs0, probs1):
-    small_entropies = entropy(probs0, axis=-1)
-    big_entropies = entropy(probs1, axis=-1)
-    entropy_diff = big_entropies - small_entropies
-
-    return entropy_diff
-
-
 def create_individual_feature_vector(functions, distr0, distr1):
     feature_vector = []
     for function in functions:

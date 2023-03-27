@@ -5,7 +5,7 @@ import numpy as np
 import pickle
 
 
-def prepare_training_data(probs1, labels, num_sheets):
+def prepare_training_data(probs1, num_sheets, labels=None):
     formatted_data = []
     for i, sheets in enumerate(tqdm(probs1[:num_sheets])):
         sequence = []
@@ -15,25 +15,21 @@ def prepare_training_data(probs1, labels, num_sheets):
             sequence.append(samples)
         formatted_data.append(sequence)
 
-    counter = 0
-    formatted_labels = []
-    for i in range(num_sheets):
-        #if i == 0 or i == 1:
-            #print(f"labels {i}: {labels[i * 64:(i + 1) * 64]}")
-        #if 2 in labels[i * 64:(i + 1) * 64]:
-        #    counter += 1
-        formatted_labels.append([])
-        for j in range(64):
-            formatted_labels[i].append(next(labels))
-        # if 2 in formatted_labels[i]:
-        #     counter += 1
+    if labels != None:
+        formatted_labels = []
+        for i in range(num_sheets):
+            formatted_labels.append([])
+            for j in range(64):
+                formatted_labels[i].append(next(labels))
+        df_dict = {
+          "text": formatted_data,
+          "label": formatted_labels
+        }
+    else:
+        df_dict = {
+            "text": formatted_data
+        }
 
-    #print(f"\n\nThe counter is at: {counter}\n\n\n")
-
-    df_dict = {
-      "text": formatted_data,
-      "label": formatted_labels
-    }
     df = pd.DataFrame(df_dict)
     return df
 

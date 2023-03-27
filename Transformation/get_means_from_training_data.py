@@ -43,22 +43,22 @@ def get_means_from_training_data(functions, num_features, num_sheets, labels=Non
 
 if __name__ == "__main__":
     print(config.function_feature_dict)
-    # feature_vector = np.array([[1, 3, 4, 5],
-    #                            [6, 3, 6, 2],
-    #                            [7, 6, 1, 4],
-    #                            [3, 2, 4, 1]])
-    #
-    # print(f"feature_vector shape: {feature_vector.shape}")
-    # labels_matrix = np.array([1,
-    #                    0,
-    #                    0,
-    #                    1])
-    #
-    # function_list_1 = [bucket_diff_top_k, entropy_difference]
-    #
-    # dict_means = get_means_from_training_data(num_features=4, num_sheets=10000, functions=function_list_1,
-    #                                           labels=labels_matrix)
-    #
-    # for key, value in dict_means.items():
-    #     print(key, value)
+    feature_vector = np.array([[[1, 3, 4, 5],
+                               [6, 3, 6, 2],
+                               [7, 6, 1, 4],
+                               [3, 2, 4, 1]]])
+
+    print(f"feature_vector shape: {feature_vector.shape}")
+    labels_matrix = np.array([1,
+                       0,
+                       0,
+                       1])
+
+    function_list_1 = [bucket_diff_top_k, entropy_difference]
+
+    dict_means = get_means_from_training_data(num_features=4, num_sheets=10000, functions=function_list_1,
+                                              labels=labels_matrix)
+
+    for key, value in dict_means.items():
+        print(key, value)
 

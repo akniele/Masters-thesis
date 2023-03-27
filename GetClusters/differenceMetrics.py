@@ -34,11 +34,14 @@ def not_used_sort_probs(big_probs, small_probs, sort_by=0):  # sorts the probabi
 
 
 def sort_probs(big_probs, small_probs=None):
+    big_probs = big_probs.numpy()
     indices = np.argsort(big_probs, axis=-1)  # get indices to sort by
-    indices_reverse = np.flip(indices, axis=-1)  # order descendingly
+    #indices_reverse = np.flip(indices, axis=-1)  # order descendingly
+    indices_reverse = indices[:, :, ::-1]
     #  could also do indices_reverse = indices[:,:,::-1]
     big_probs_sorted = np.take_along_axis(big_probs, indices_reverse, axis=-1)
     if small_probs != None:
+        small_probs = small_probs.numpy()
         small_probs_sorted = np.take_along_axis(small_probs, indices_reverse, axis=-1)
         return big_probs_sorted, small_probs_sorted, indices
 
@@ -66,6 +69,14 @@ def not_used_bucket_diff_top_k(probs0, probs1, number_of_buckets=None, indices=N
     return bucket_diff  # returns the probability of buckets of specified size k each
 
 
+def get_entropy_feature(probs0, probs1, indices=None):  # indices is a dummy parameter, not used
+    small_entropies = entropy(probs0, axis=-1)
+    big_entropies = entropy(probs1, axis=-1)
+    entropy_diff = big_entropies - small_entropies
+
+    return entropy_diff
+
+
 def bucket_diff_top_k(probs0, probs1, indices=None):
     """
     calculates the difference in the summed probability between distribution pairs, bucket-wise
@@ -77,7 +88,7 @@ def bucket_diff_top_k(probs0, probs1, indices=None):
     if indices is None:
         indices = [10, 35]
 
-    big_sample_sorted, small_sample_sorted = sort_probs(probs1, probs0)
+    big_sample_sorted, small_sample_sorted, _ = sort_probs(probs1, probs0)
     print(f"big_sample_sorted.shape: {big_sample_sorted.shape}")
     split_probs_big = np.split(big_sample_sorted, indices, axis=-1)
     print(f"split_probs_big[0].shape: {split_probs_big[0].shape}")

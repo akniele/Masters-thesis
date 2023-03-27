@@ -14,6 +14,7 @@ from differenceMetrics import sort_probs
 from scipy.stats import entropy # kl-divergence/relative entropy if optional parameter qk is given, else calculate Shannon entropy
 from fill_up_distributions import fill_multiple_distributions
 
+
 def create_prediction_data(probs1):  # held out data that has not been used to create features
     predict_data = []
     for i, sheets in enumerate(probs1[27:]):
@@ -27,16 +28,6 @@ def create_prediction_data(probs1):  # held out data that has not been used to c
       "text": predict_data}
     df = pd.DataFrame(predict_dict)
     return df
-
-
-def classifyProbabilityIntoFamily(bigprobs):
-    model = BertClassifier()
-    model.load_state_dict(torch.load(f'first_try.pt'))
-    model.eval()
-
-    predictions = model.predict(bigprobs)
-
-    return predictions  # return a number that corresponds to the family (as defined by the clusters)
 
 
 def transformProbabilities(bigprobs):
@@ -377,6 +368,32 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     final_probs = sorted_big_probs[depth, rows, sorted_indices]  # unsort the probabilities
 
     return final_probs
+
+
+def transformations(bigprobs, pred_labels, mean_features):
+    """
+    1. fill up distributions
+    2. create boolean array with pred labels
+    3. for each distribution of a certain label, transform distribution using the relevant mean features
+    4. return array with the transformed distributions
+    :param bigprobs:
+    :param pred_labels:
+    :param mean_features: dictionary with mean features
+    :return:
+    """
+
+
+def evaluate_transformations(transformed_probs, bigprobs, smallprobs):
+    """
+    1. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
+    2. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
+    3. See if distance between transformed and small probs is smaller than between original big probs and small probs
+    4. return distance between transformed and small probs as a loss to be minimized
+    :param transformed_probs:
+    :param bigprobs:
+    :param smallprobs:
+    :return:
+    """
 
 
 if __name__ == "__main__":
