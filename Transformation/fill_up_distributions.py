@@ -69,7 +69,6 @@ def fill_multiple_distributions(distributions, indices, topk=256):
 
     new_probs = np.full((distributions.shape[0], distributions.shape[1], VOCAB_LENGTH), prop_to_fill_per_element)
 
-
     indices = indices.astype(int)
 
     depth = np.arange(len(distributions))

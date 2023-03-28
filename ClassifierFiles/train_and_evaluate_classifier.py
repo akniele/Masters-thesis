@@ -88,6 +88,6 @@ def make_predictions(num_classes, num_sheets):
 
     pred_labels = predict_label(model, df)
 
-    print(pred_labels[:50])
+    return pred_labels
 
 

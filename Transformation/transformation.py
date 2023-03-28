@@ -7,12 +7,13 @@ from scipy.spatial import distance  # distance.cityblock gives manhattan distanc
 from scipy.optimize import minimize
 import pickle
 import sys
+import config
 
 sys.path.append('../GetClusters')
-from differenceMetrics import sort_probs
+from GetClusters.differenceMetrics import sort_probs
 #from ClassifierFiles.classifier import BertClassifier
 from scipy.stats import entropy # kl-divergence/relative entropy if optional parameter qk is given, else calculate Shannon entropy
-from fill_up_distributions import fill_multiple_distributions
+from Transformation.fill_up_distributions import fill_multiple_distributions
 
 
 def create_prediction_data(probs1):  # held out data that has not been used to create features
@@ -183,27 +184,6 @@ def compare_distance(new_probs, small_probs, big_probs):
     return total_weighted_distance_changed, total_weighted_distance_unchanged
 
 
-""" 
-    Takes all of the probability distributions we want to change, and runs them through the transformations:
-    
-    trans0: adjusting the total probability per bucket
-    trans1: adjusting the entropy
-
-"""
-
-
-def probability_transformation(big_probs, small_probs):
-    all_new_probs = []
-    for i, sheet in enumerate(tqdm(big_probs, desc="Transformations")):
-        all_new_probs.append([])
-        for j, timestep in enumerate(sheet):  # 64 timesteps per sheet
-            new_probs = trans1(big_probs[i][j], small_probs[i][j])
-            #new_probs = trans0(big_probs[i][j])
-            all_new_probs[i].append(new_probs)
-
-    return np.array(all_new_probs)
-
-
 """
   1. sort the big probability distribution descendingly, save indices
   2. for each bucket, change the total probability by as much as the difference metric suggested would be good
@@ -286,7 +266,7 @@ def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchan
     return (new_entropy - entropy_small)**2
 
 
-def trans1(bigprobs, smallprobs, mean_entropy):
+def trans_1(bigprobs, mean_entropy):
     """
     :param bigprobs: a single probability distribution from the big model
     :param smallprobs: a single probability distribution from the small model
@@ -312,8 +292,6 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
     sorted_indices = bigprobs.argsort()[:, :, ::-1]
 
-    print(f"bucket indices: {bucket_indices}")
-
     depth = np.arange(len(bigprobs))
     depth = np.expand_dims(depth, 1)
     depth = np.expand_dims(depth, 2)
@@ -325,8 +303,6 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
     sorted_big_probs = bigprobs[depth, rows, sorted_indices]
 
-    print(f"sum first distribution: {sum(sorted_big_probs[0][0])}")
-
     del bigprobs
 
     current_bucket_probs = np.ones((sorted_big_probs.shape[0], sorted_big_probs.shape[1], len(bucket_indices)-1))
@@ -334,17 +310,11 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     for i, index in enumerate(bucket_indices[:-1]):  # get current bucket probabilities
         current_bucket_probs[:, :, i] = np.sum(sorted_big_probs[:, :, index:bucket_indices[i + 1]], -1)
 
-    print(f"current bucket probs: {current_bucket_probs[:1, :1, :]}")
-
     new_bucket_trans = current_bucket_probs + mean_bucket_trans  # add up current bucket probs and transformations from train data
-
-    print(f"new bucket trans: {new_bucket_trans[:1, :1, :]}")
 
     min_cols = np.amin(new_bucket_trans, axis=-1)  # get min bucket prob
 
     output = min_cols < 0  # create boolean mask, True if there's a bucket prob < 0, else False
-
-    print(f"output: {output[:1, :1]}")
 
     def add_min_and_normalize(x):  # called if there's a bucket prob < 0, adds this prob to all probs, then normalizes
         x2 = x + np.expand_dims(abs(np.min(x, axis=-1)), -1)
@@ -358,8 +328,6 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
     target_transformation = new_bucket_trans - current_bucket_probs # get final bucket transformation, i.e. how much to add / subtract from each bucket after normalization
 
-    print(f"target transformation: {target_transformation[:1, :1, :]}")
-
     for i, index in enumerate(bucket_indices[:-1]):  # get current bucket probabilities
         sorted_big_probs[:, :, index:bucket_indices[i+1]] = sorted_big_probs[:, :, index:bucket_indices[i + 1]] + \
                                                      np.expand_dims(target_transformation[:, :, i] /
@@ -370,10 +338,10 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     return final_probs
 
 
-def transformations(bigprobs, pred_labels, mean_features):
+def transformations(bigprobs, indices, mean_features, bucket_indices, functions, pred_labels=None):
     """
     1. fill up distributions
-    2. create boolean array with pred labels
+    2. create boolean array with pred labels ->
     3. for each distribution of a certain label, transform distribution using the relevant mean features
     4. return array with the transformed distributions
     :param bigprobs:
@@ -381,6 +349,44 @@ def transformations(bigprobs, pred_labels, mean_features):
     :param mean_features: dictionary with mean features
     :return:
     """
+    print(f"entropy big probs first distribution: {entropy(bigprobs[0][0], axis=-1)}")
+
+    print("  => FILL UP DISTRIBUTIONS")
+    transformed_probs = fill_multiple_distributions(bigprobs, indices)
+
+    print("  => DONE FILLING UP DISTRIBUTIONS")
+
+    if pred_labels is not None:
+        unique_labels = np.unique(pred_labels)
+
+        num_features = [config.function_feature_dict[f"{function.__name__}"] for function in functions]
+        print(f"number of features: {num_features}")
+
+        bucket_indices.insert(0, 0)
+        bucket_indices.append(16384)
+
+        for label in tqdm(unique_labels, desc="iterating over labels"):
+            means = []
+            for j in range(len(num_features)):
+                means.extend([mean_features[f"{functions[j].__name__}_{i}_{label}"] for i in range(num_features[j])])
+            print(f"means for label {label}: {means}")
+
+            print(f"  => FIRST TRANSFORMATION")
+
+            print(f"means[num_features[0]:]: {means[num_features[0]:]}")
+
+            transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
+                                                                          transformed_probs[pred_labels == label],
+                                                                          means[num_features[0]:])
+            print(f"  => SECOND TRANSFORMATION")
+
+            transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
+                                                              means[:num_features[0]], bucket_indices)
+            print(f"  => DONE!")
+
+            print(f"entropy big probs first distribution: {entropy(transformed_probs[0][0], axis=-1)}")
+
+    return transformed_probs
 
 
 def evaluate_transformations(transformed_probs, bigprobs, smallprobs):
@@ -388,12 +394,25 @@ def evaluate_transformations(transformed_probs, bigprobs, smallprobs):
     1. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
     2. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
     3. See if distance between transformed and small probs is smaller than between original big probs and small probs
-    4. return distance between transformed and small probs as a loss to be minimized
+    4. return mean distance between trans and small probs minus mean distance between big and small probs
     :param transformed_probs:
     :param bigprobs:
     :param smallprobs:
     :return:
     """
+    _, dist_trans, _ = weightedManhattanDistance(transformed_probs, smallprobs, probScaleLimit=0.2)
+    _, dist_big, _ = weightedManhattanDistance(bigprobs, smallprobs, probScaleLimit=0.2)
+
+    print(f"shape dist_trans: {dist_trans.shape}")
+    print(f"shape dist_big: {dist_big.shape}")
+
+    mean_dist_trans = np.mean(dist_trans, axis=-1)
+    mean_dist_big = np.mean(dist_big, axis=-1)
+
+    print(f" mean_dist_trans: {mean_dist_trans}")
+    print(f" mean_dist_big: {mean_dist_big}")
+
+    return mean_dist_trans - mean_dist_big
 
 
 if __name__ == "__main__":

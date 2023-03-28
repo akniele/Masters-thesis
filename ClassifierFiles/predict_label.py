@@ -3,6 +3,7 @@ import pandas as pd
 import ClassifierFiles.datasetPredict as datasetPredict
 
 import torch
+from tqdm import tqdm
 
 
 def predict_label(model, predict_data):
@@ -19,7 +20,7 @@ def predict_label(model, predict_data):
     with torch.no_grad():
         pred_labels = []
 
-        for test_input in predict_dataloader:
+        for test_input in tqdm(predict_dataloader):
             input_embeds = test_input.to(device)
 
             output = model(inputs_embeds=input_embeds)
