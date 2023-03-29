@@ -10,15 +10,16 @@
 """
 import sys
 import pickle
+import statistics
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 import numpy as np
 from tqdm import tqdm
+import math
 
 
-from GetClusters.clustering import k_means_clustering
-from GetClusters.clustering import find_optimal_n, label_distribution
-from GetClusters.differenceMetrics import get_entropy_feature
+from GetClusters.clustering import k_means_clustering, label_distribution
+from GetClusters.clustering import find_optimal_n
 from GetClusters.differenceMetrics import bucket_diff_top_k
 from GetClusters.differenceMetrics import get_entropy_feature
 from GetClusters.featureVector import load_feature_vector
@@ -28,7 +29,7 @@ from GetClusters.featureVector import create_and_save_feature_vector
 from ClassifierFiles import train_and_evaluate_classifier
 from GetClusters.featureVector import fill_all_distributions_and_create_features
 from ClassifierFiles.train_and_evaluate_classifier import make_predictions
-from Transformation.transformation import transformations
+from Transformation.transformation import transformations, evaluate_transformations
 
 
 sys.path.insert(1, '../Non-Residual-GANN')
@@ -40,29 +41,135 @@ from GenerateData.load_data_new import generateData
 # from Transformation.transformation import compare_distributions
 
 
+def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr,
+             generate_data=False, train_classifier=False):
+    NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
+    N_CLUSTERS = num_clusters  # number of clusters used for clustering
+
+    # for classifier:
+    NUM_CLASSES = N_CLUSTERS  # number of classes for the classifier model (has to be same as number of clusters)
+    BATCH_SIZE = batch_size
+    EPOCHS = epochs
+    LR = lr
+
+    if generate_data:
+        print("  => GENERATING DATA AND FEATURE VECTORS")
+        generateData(functions, bucket_indices, num_samples=100000, truncate=True, topk=256, save=True)
+
+    print("  => LOADING SCALED FEATURES FOR CLUSTERING")
+    scaled_features = load_feature_vector(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
+    print(f"Shape of scaled features: {scaled_features.shape}")
+    print(scaled_features[:3])
+    print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
+
+    print("  => CLUSTERING")
+    labels = k_means_clustering(scaled_features, N_CLUSTERS)
+    #label_distribution = label_distribution(N_CLUSTERS, labels)
+    #print(f"label distribution: {label_distribution}")
+
+    print("  => GET MEAN FEATURES FROM TRAINING DATA")
+    dict_means = get_means_from_training_data(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS,
+                                              labels=labels)
+
+    for key, value in dict_means.items():
+        print(f"key: {key}\t value:{value}")
+
+    if train_classifier:
+        pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
+            NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS)
+
+    new_pred_labels = make_predictions(3, num_sheets=NUM_TRAIN_SHEETS)
+
+    print(f"pred labels: {new_pred_labels[:50]}")
+
+    print("  => LOAD DATA FOR TRANSFORMATION")
+
+    with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
+        bigprobs = pickle.load(f)
+
+    bigprobs = bigprobs[:500].numpy()
+
+    #max_probs = np.amax(bigprobs, axis=-1)
+    #min_of_max_probs = np.amin(max_probs)
+
+    #print(f"min of max probs: {min_of_max_probs}")
+
+    #upper_bound = - (math.log(1.7976931348623157e+308, min_of_max_probs))
+
+    with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
+        indices1 = pickle.load(g)
+
+    indices1 = indices1[:500].numpy()
+
+    print("  => LOAD DATA FOR EVALUATION")
+
+    with open(f"train_data/train_small_100000_9.pkl", "rb") as f:
+        smallprobs = pickle.load(f)
+
+    smallprobs = smallprobs[:500].numpy()
+
+    with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
+        indices0 = pickle.load(g)
+
+    indices0 = indices0[:500].numpy()
+
+    bucket_indices.insert(0, 0)
+    bucket_indices.append(16384)
+
+    scores = []
+
+    for i in tqdm(range(5)):
+        transformed_probs, filled_up_probs = transformations(bigprobs[i*100:(i+1)*100], indices1[i*100:(i+1)*100],
+                                                             dict_means, bucket_indices, functions,
+                                                             upper_bound=130,
+                                                             pred_labels=new_pred_labels[i*100:(i+1)*100])
+
+        print(f"shape transformed_probs: {transformed_probs.shape}")
+        print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
+
+        score = evaluate_transformations(transformed_probs, filled_up_probs,
+                                         smallprobs[i*100:(i+1)*100], indices0[i*100:(i+1)*100])
+
+        scores.append(score)
+
+    return statistics.mean(scores)
+
+
+def generate_data(functions, bucket_indices, num_samples=100000, truncate=True, topk=256, save=True):
+    print("  => GENERATING DATA AND FEATURE VECTORS")
+    generateData(functions, bucket_indices, num_samples=num_samples, truncate=truncate, topk=topk, save=save)
+
+
 if __name__ == "__main__":
+    BUCKET_INDICES = [10, 35]
+    FUNCTIONS = [bucket_diff_top_k, get_entropy_feature]
+    print("  => GENERATING DATA AND FEATURE VECTORS")
+    generateData(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
+                 num_samples=100000, truncate=True, topk=256, save=True)
 
     """Load data"""
-    NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
+    #NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
 
     # small_probs, big_probs, small_indices_final, big_indices_final = generateData(
     #          num_samples=100000, truncate=True, topk=256, save=True)
 
-    bucket_indices = [10, 35]  # TODO: no 0 and len(distribution), add those two in trans0 transformation function!
-    # functions = [bucket_diff_top_k, get_entropy_feature]
-    #
-    # small_probabilities, big_probabilities, small_indices, big_indices, features = \
-    #     generateData(functions, bucket_indices, num_samples=20000, truncate=True, topk=256, save=True)
+    #bucket_indices = [10, 35]
+    #functions = [bucket_diff_top_k, get_entropy_feature]
+
+    #small_probabilities, big_probabilities, small_indices, big_indices, features = \
+    #generateData(functions, bucket_indices, num_samples=100000, truncate=True, topk=256, save=True)
+
+
 
 #########################################################################
     # for i in tqdm(range(1)):
     #     print("  => LOADING DATA")
     #     print(i)
 
-    with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
-        probs1 = pickle.load(f)
-
-    probs1 = probs1.numpy()
+    # with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
+    #     probs1 = pickle.load(f)
+    #
+    # probs1 = probs1.numpy()
     #
     #     with open(f"train_data/train_small_100000_{i}.pkl", "rb") as g:
     #         probs0 = pickle.load(g)
@@ -74,10 +181,10 @@ if __name__ == "__main__":
     #
     #     indices0 = indices0.numpy()
     #
-    with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
-        indices1 = pickle.load(g)
-
-    indices1 = indices1.numpy()
+    # with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
+    #     indices1 = pickle.load(g)
+    #
+    # indices1 = indices1.numpy()
     #
     #     functions = []
     #
@@ -97,7 +204,7 @@ if __name__ == "__main__":
     #
     #     """create scaled feature vector"""
 
-    functions = [bucket_diff_top_k, get_entropy_feature]  # difference metrics to use for creating feature vector
+    #functions = [bucket_diff_top_k, get_entropy_feature]  # difference metrics to use for creating feature vector
     # #
     # create_and_save_feature_vector(function_list, NUM_TRAIN_SHEETS, filled=True)
 
@@ -108,11 +215,11 @@ if __name__ == "__main__":
     # print(features[:3])
     # print(features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
 
-    scaled_features = load_feature_vector(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
-
-    print(f"Shape of scaled features: {scaled_features.shape}")
-    print(scaled_features[:3])
-    print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
+    # scaled_features = load_feature_vector(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
+    #
+    # print(f"Shape of scaled features: {scaled_features.shape}")
+    # print(scaled_features[:3])
+    # print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
 
     # ---------------------------------------------------------------------------------------#
 
@@ -124,19 +231,19 @@ if __name__ == "__main__":
 
     # ---------------------------------------------------------------------#
 
-    N_CLUSTERS = 3
-
-    labels = k_means_clustering(scaled_features, N_CLUSTERS)
-
-    label_distribution = label_distribution(N_CLUSTERS, labels)
-
-    print(f"label distribution: {label_distribution}")
-
-    dict_means = get_means_from_training_data(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS,
-                                              labels=labels)
-
-    for key, value in dict_means.items():
-        print(f"key: {key}\t value:{value}")
+    # N_CLUSTERS = 3
+    #
+    # labels = k_means_clustering(scaled_features, N_CLUSTERS)
+    #
+    # label_distribution = label_distribution(N_CLUSTERS, labels)
+    #
+    # print(f"label distribution: {label_distribution}")
+    #
+    # dict_means = get_means_from_training_data(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS,
+    #                                           labels=labels)
+    #
+    # for key, value in dict_means.items():
+    #     print(f"key: {key}\t value:{value}")
 
     # -------------------------------------------------------------------------------#
 
@@ -150,14 +257,14 @@ if __name__ == "__main__":
 
     # ------------------------------------------------------------------------------------#
 
-    pred_labels = make_predictions(3, num_sheets=NUM_TRAIN_SHEETS)
-
-    print(f"pred labels: {pred_labels[:50]}")
-
-    transformed_probs = transformations(probs1[:5], indices1[:5], dict_means, bucket_indices, functions, pred_labels=pred_labels[:5])
-
-    print(f"shape transformed_probs: {transformed_probs.shape}")
-    print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
+    # pred_labels = make_predictions(3, num_sheets=NUM_TRAIN_SHEETS)
+    #
+    # print(f"pred labels: {pred_labels[:50]}")
+    #
+    # transformed_probs = transformations(probs1[:5], indices1[:5], dict_means, bucket_indices, functions, pred_labels=pred_labels[:5])
+    #
+    # print(f"shape transformed_probs: {transformed_probs.shape}")
+    # print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
 
     # held_out_data = create_prediction_data(probs1)
 

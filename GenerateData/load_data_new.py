@@ -56,7 +56,7 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
 
     num_features = sum([config.function_feature_dict[f"{function.__name__}"] for function in functions])
 
-    for i in tqdm.tqdm(range(2)):
+    for i in tqdm.tqdm(range(10)):
         print("  => INITIALIZING ARRAYS")
         big_probabilities = torch.zeros((num_samples//10, sequence_length, TOPK))
         small_probabilities = torch.zeros((num_samples//10, sequence_length, TOPK))
@@ -64,10 +64,10 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
         big_indices = torch.zeros((num_samples//10, sequence_length, TOPK))
         small_indices = torch.zeros((num_samples//10, sequence_length, TOPK))
 
-        tmp_big = torch.zeros((500, SEQUENCE_LENGTH, VOCAB_LENGTH))
-        tmp_small = torch.zeros((500, SEQUENCE_LENGTH, VOCAB_LENGTH))
+        tmp_big = torch.zeros((200, SEQUENCE_LENGTH, VOCAB_LENGTH))
+        tmp_small = torch.zeros((200, SEQUENCE_LENGTH, VOCAB_LENGTH))
 
-        if i < 9:  # only get features for the first 9 files, the 10th is test data
+        if i < 10:  # only get features for the first 9 files, the 10th is test data
             features = torch.zeros((num_samples//10, sequence_length, num_features))
 
         print("  => DONE INITIALIZING ARRAYS")
@@ -97,25 +97,27 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
             inputIDs = (torch.tensor(example).to(DEVICE))  # size [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
             smallProb, bigProb = getData(inputIDs)
 
-            tmp_small[index % 500] = smallProb.detach().cpu()
-            tmp_big[index % 500] = bigProb.detach().cpu()
+            tmp_small[index % 200] = smallProb.detach().cpu()
+            tmp_big[index % 200] = bigProb.detach().cpu()
 
             index += 1
 
-            if index % 500 == 0 and truncate:
+            if index % 200 == 0 and truncate:
+                print(f"  => SORTING AND TRUNCATING PROBS")
                 small_ordered, small_indx = torch.sort(tmp_small, descending=True)
                 big_ordered, big_indx = torch.sort(tmp_big, descending=True)
 
                 small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
                 big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
 
-                small_probabilities[index-500:index, :, :] = small_ordered
-                big_probabilities[index - 500:index, :, :] = big_ordered
+                small_probabilities[index-200:index, :, :] = small_ordered
+                big_probabilities[index - 200:index, :, :] = big_ordered
 
-                small_indices[index-500:index, :, :] = small_indx
-                big_indices[index - 500:index, :, :] = big_indx
+                small_indices[index-200:index, :, :] = small_indx
+                big_indices[index - 200:index, :, :] = big_indx
 
-                if i < 9:
+                if i < 10:
+                    print(f"  => CREATING FEATURE VECTOR")
                     # create feature vector!
                     num_features_function = 0
                     for j in range(len(functions)):
@@ -126,8 +128,9 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
                         start = num_features_function
                         num_features_function += config.function_feature_dict[f"{functions[j].__name__}"]
                         print(f"shape bucket_diffs: {diffs.shape}")
-                        features[index-500:index, :, start:num_features_function] = torch.from_numpy(diffs)
+                        features[index-200:index, :, start:num_features_function] = torch.from_numpy(diffs)
                         print(f"shape features: {features.shape}")
+                print(f"  => DONE CREATING FEATURE VECTOR")
 
         if save:
             print("  => SAVING...")
@@ -143,11 +146,11 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
             with open(f"../pipeline/new_data/indices_small_{num_samples//10}_{i}.pkl", "wb") as f:
                 pickle.dump(small_indices, f)
 
-            if i < 9:
+            if i < 10:
                 with open(f"../pipeline/new_data/features_{num_samples//10}_{i}.pkl", "wb") as g:
                     pickle.dump(features, g)
 
-    return small_probabilities, big_probabilities, small_indices, big_indices, features
+    #return small_probabilities, big_probabilities, small_indices, big_indices, features
 
 
 # if __name__ == "__main__":

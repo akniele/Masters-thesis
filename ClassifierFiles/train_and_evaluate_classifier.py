@@ -62,7 +62,7 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
 def make_predictions(num_classes, num_sheets):
     NUM_CLASSES = num_classes
 
-    print("  => PREPARE DATA FOR CLASSIFICATION")
+    print("  => PREPARE DATA FOR PREDICTIONS")
 
     df = False
 

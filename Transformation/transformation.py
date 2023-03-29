@@ -52,10 +52,11 @@ def transformProbabilities(bigprobs):
 
 
 # Fredrik's metric, for this purpose timeStepDiffs and sampleDiffs returns the same
-def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.2):
+def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.02):
     dist1 = torch.FloatTensor(dist1)
     dist2 = torch.FloatTensor(dist2)
     probSums = dist1 + dist2
+    print(f"size probSums: {probSums.size()}")
     belowThreshold = torch.where(probSums < probScaleLimit, 1, 0)
     belowThresholdMask = (belowThreshold / probScaleLimit) * probSums
     overThresholdMask = 1 - belowThreshold
@@ -266,7 +267,7 @@ def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchan
     return (new_entropy - entropy_small)**2
 
 
-def trans_1(bigprobs, mean_entropy):
+def trans_1(bigprobs, mean_entropy, upper_bound):
     """
     :param bigprobs: a single probability distribution from the big model
     :param smallprobs: a single probability distribution from the small model
@@ -274,14 +275,13 @@ def trans_1(bigprobs, mean_entropy):
     :return: the probability distribution from the big model, transformed to approximate the entropy of the small model
     """
     # change the entropy of the big probability distribution to make it more similar to the entropy of the smaller model
-    p = bigprobs
+    p = bigprobs.astype('float64')
     p = np.expand_dims(p, 1)  # unsqueeze p (optimizer wants (n,1))
 
     small_entropy = mean_entropy
-    #4.361379
-    #entropy(smallprobs)
+    bounds = [(0, upper_bound)]
 
-    solution = minimize(fun=f, x0=1, args=(p, small_entropy)) # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
+    solution = minimize(fun=f, x0=1, bounds=bounds, args=(p, small_entropy)) # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
     new_z = sum(p**solution.x)
     transformed_p = (p**solution.x) / new_z
     transformed_p = np.squeeze(transformed_p, 1)  # squeeze away the dimension we needed for the optimizer
@@ -338,7 +338,7 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     return final_probs
 
 
-def transformations(bigprobs, indices, mean_features, bucket_indices, functions, pred_labels=None):
+def transformations(bigprobs, indices, mean_features, bucket_indices, functions, upper_bound, pred_labels=None):
     """
     1. fill up distributions
     2. create boolean array with pred labels ->
@@ -352,18 +352,16 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
     print(f"entropy big probs first distribution: {entropy(bigprobs[0][0], axis=-1)}")
 
     print("  => FILL UP DISTRIBUTIONS")
-    transformed_probs = fill_multiple_distributions(bigprobs, indices)
-
+    filled_up_probs = fill_multiple_distributions(bigprobs, indices)
     print("  => DONE FILLING UP DISTRIBUTIONS")
+
+    transformed_probs = filled_up_probs.copy()
 
     if pred_labels is not None:
         unique_labels = np.unique(pred_labels)
 
         num_features = [config.function_feature_dict[f"{function.__name__}"] for function in functions]
         print(f"number of features: {num_features}")
-
-        bucket_indices.insert(0, 0)
-        bucket_indices.append(16384)
 
         for label in tqdm(unique_labels, desc="iterating over labels"):
             means = []
@@ -377,37 +375,46 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
 
             transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
                                                                           transformed_probs[pred_labels == label],
-                                                                          means[num_features[0]:])
-            print(f"  => SECOND TRANSFORMATION")
-
-            transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
-                                                              means[:num_features[0]], bucket_indices)
+                                                                          means[num_features[0]:], upper_bound)
+            # print(f"  => SECOND TRANSFORMATION")
+            #
+            # transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
+            #                                                   means[:num_features[0]], bucket_indices)
             print(f"  => DONE!")
 
             print(f"entropy big probs first distribution: {entropy(transformed_probs[0][0], axis=-1)}")
 
-    return transformed_probs
+    return transformed_probs, filled_up_probs
 
 
-def evaluate_transformations(transformed_probs, bigprobs, smallprobs):
+def evaluate_transformations(transformed_probs, bigprobs, smallprobs, small_indices):
     """
-    1. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
-    2. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
-    3. See if distance between transformed and small probs is smaller than between original big probs and small probs
-    4. return mean distance between trans and small probs minus mean distance between big and small probs
+    1. Fill up distributions from the smaller model
+    2. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
+    3. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
+    4. See if distance between transformed and small probs is smaller than between original big probs and small probs
+    5. return mean distance between trans and small probs minus mean distance between big and small probs
     :param transformed_probs:
     :param bigprobs:
     :param smallprobs:
     :return:
     """
-    _, dist_trans, _ = weightedManhattanDistance(transformed_probs, smallprobs, probScaleLimit=0.2)
-    _, dist_big, _ = weightedManhattanDistance(bigprobs, smallprobs, probScaleLimit=0.2)
+
+    print("  => FILL UP SMALL DISTRIBUTIONS")
+    filled_up_small_probs = fill_multiple_distributions(smallprobs, small_indices)
+    print("  => DONE FILLING UP SMALL DISTRIBUTIONS")
+
+    _, dist_trans, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.2)
+    _, dist_big, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.2)
 
     print(f"shape dist_trans: {dist_trans.shape}")
     print(f"shape dist_big: {dist_big.shape}")
 
-    mean_dist_trans = np.mean(dist_trans, axis=-1)
-    mean_dist_big = np.mean(dist_big, axis=-1)
+    print(f"type dist_big: {type(dist_big)}")
+    print(f"dtype dist_trans: {dist_trans.dtype}")
+
+    mean_dist_trans = torch.mean(dist_trans).item()  # TODO: should I use axis=-1 here?
+    mean_dist_big = torch.mean(dist_big).item()  # TODO: should I use axis=-1 here?
 
     print(f" mean_dist_trans: {mean_dist_trans}")
     print(f" mean_dist_big: {mean_dist_big}")
