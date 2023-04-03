@@ -67,8 +67,7 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
         tmp_big = torch.zeros((200, SEQUENCE_LENGTH, VOCAB_LENGTH))
         tmp_small = torch.zeros((200, SEQUENCE_LENGTH, VOCAB_LENGTH))
 
-        if i < 10:  # only get features for the first 9 files, the 10th is test data
-            features = torch.zeros((num_samples//10, sequence_length, num_features))
+        features = torch.zeros((num_samples//10, sequence_length, num_features))
 
         print("  => DONE INITIALIZING ARRAYS")
 
@@ -116,20 +115,18 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
                 small_indices[index-200:index, :, :] = small_indx
                 big_indices[index - 200:index, :, :] = big_indx
 
-                if i < 10:
-                    print(f"  => CREATING FEATURE VECTOR")
-                    # create feature vector!
-                    num_features_function = 0
-                    for j in range(len(functions)):
-                        diffs = functions[j](tmp_small, tmp_big, bucket_indices)
-                        if len(diffs.shape) == 2:
-                            diffs = np.expand_dims(diffs, -1)
+                print(f"  => CREATING FEATURE VECTOR")
+                num_features_function = 0
+                for j in range(len(functions)):
+                    diffs = functions[j](tmp_small, tmp_big, bucket_indices)
+                    if len(diffs.shape) == 2:  # add a dimension for the entropies
+                        diffs = np.expand_dims(diffs, -1)
 
-                        start = num_features_function
-                        num_features_function += config.function_feature_dict[f"{functions[j].__name__}"]
-                        print(f"shape bucket_diffs: {diffs.shape}")
-                        features[index-200:index, :, start:num_features_function] = torch.from_numpy(diffs)
-                        print(f"shape features: {features.shape}")
+                    start = num_features_function
+                    num_features_function += config.function_feature_dict[f"{functions[j].__name__}"]
+                    print(f"shape bucket_diffs: {diffs.shape}")
+                    features[index-200:index, :, start:num_features_function] = torch.from_numpy(diffs)
+                    print(f"shape features: {features.shape}")
                 print(f"  => DONE CREATING FEATURE VECTOR")
 
         if save:
@@ -140,15 +137,15 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
             with open(f"../pipeline/new_data/small_{num_samples//10}_{i}.pkl", "wb") as g:
                 pickle.dump(small_probabilities, g)
 
-            with open(f"../pipeline/new_data/indices_big_{num_samples//10}_{i}.pkl", "wb") as f:
-                pickle.dump(big_indices, f)
+            with open(f"../pipeline/new_data/indices_big_{num_samples//10}_{i}.pkl", "wb") as h:
+                pickle.dump(big_indices, h)
 
-            with open(f"../pipeline/new_data/indices_small_{num_samples//10}_{i}.pkl", "wb") as f:
-                pickle.dump(small_indices, f)
+            with open(f"../pipeline/new_data/indices_small_{num_samples//10}_{i}.pkl", "wb") as k:
+                pickle.dump(small_indices, k)
 
             if i < 10:
-                with open(f"../pipeline/new_data/features_{num_samples//10}_{i}.pkl", "wb") as g:
-                    pickle.dump(features, g)
+                with open(f"../pipeline/new_data/features_{num_samples//10}_{i}.pkl", "wb") as m:
+                    pickle.dump(features, m)
 
     #return small_probabilities, big_probabilities, small_indices, big_indices, features
 

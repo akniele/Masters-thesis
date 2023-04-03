@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import entropy
 import torch
+import pickle
 
 # f = lambda x: torch.tensor(x, dtype=torch.float32)
 #
@@ -54,7 +55,7 @@ import torch
 def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchange.com/questions/521582/controlling-the-entropy-of-a-distribution
     z = sum(p**beta)
     new_entropy = (-1 / z) * sum((p**beta) * (beta * np.log(p) - np.log(z)))
-    return (new_entropy - entropy_small)**2
+    return 1 # (new_entropy - entropy_small)**2
 
 
 def trans_1(bigprobs, mean_entropy):
@@ -84,26 +85,38 @@ def trans_1(bigprobs, mean_entropy):
 
 
 if __name__ == "__main__":
-    arr = np.random.randint(1, 1000, (2, 2, 600))
-    arr = arr / np.sum(arr)
-    #print(f"arr: {arr}")
-    arr2 = np.random.randint(1, 1000, (2, 2, 600))
-    arr2 = arr2 / np.sum(arr2)
-    #print(f"arr2: {arr2}")
 
-    entropy_arr = entropy(arr, axis=-1)
-    print(f"original entropy: {entropy_arr}")
+    with open(f"../train_data/train_big_100000_9.pkl", "rb") as f:
+        bigprobs = pickle.load(f)
 
-    mean_entropy = entropy(arr2, axis=-1)
-    print(f"mean entropy: {mean_entropy}")
+    bigprobs = bigprobs[:100].numpy()
 
-    transformed_arr = np.apply_along_axis(trans_1, -1, arr, mean_entropy[0][0])
+    entropy_bigprobs = entropy(bigprobs, -1)
 
-    #transformed_arr = trans_1(arr, mean_entropy)
+    print(np.min(entropy_bigprobs))
 
-    #print(f"transformed_arr {transformed_arr}")
-    print(f"entropy transformed arr: {entropy(transformed_arr, axis=-1)}")
+    # check entropy function ---------------------------------------------------------------------------------------#
+    # arr = np.random.randint(1, 1000, (2, 2, 3))
+    # arr = arr / np.sum(arr)
+    # print(f"arr: {arr}")
+    # arr2 = np.random.randint(1, 1000, (2, 2, 3))
+    # arr2 = arr2 / np.sum(arr2)
+    # print(f"arr2: {arr2}")
+    #
+    # entropy_arr = entropy(arr, axis=-1)
+    # print(f"original entropy: {entropy_arr}")
+    #
+    # mean_entropy = entropy(arr2, axis=-1)
+    # print(f"mean entropy: {mean_entropy}")
+    #
+    # transformed_arr = np.apply_along_axis(trans_1, -1, arr, mean_entropy[0][0])
+    #
+    # #transformed_arr = trans_1(arr, mean_entropy)
+    #
+    # #print(f"transformed_arr {transformed_arr}")
+    # print(f"entropy transformed arr: {entropy(transformed_arr, axis=-1)}")
 
+    ## --------------------------------------------------------------------------------------------------------------##
 
     # distr1 = np.random.default_rng().uniform(0, 0.3, (2, 2, 3))
     # print(f"distr1: {distr1}")

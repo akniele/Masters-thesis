@@ -8,6 +8,7 @@ from scipy.optimize import minimize
 import pickle
 import sys
 import config
+import warnings
 
 sys.path.append('../GetClusters')
 from GetClusters.differenceMetrics import sort_probs
@@ -263,7 +264,16 @@ def not_used_trans0(bigprobs):
 
 def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchange.com/questions/521582/controlling-the-entropy-of-a-distribution
     z = sum(p**beta)
-    new_entropy = (-1 / z) * sum((p**beta) * (beta * np.log(p) - np.log(z)))
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        try:
+            new_entropy = (-1 / z) * sum((p**beta) * (beta * np.log(p) - np.log(z)))
+        except Warning as e:
+            print(f"error found: {e}")
+            print(f" current value of beta: {beta}")
+            print(f" entropy of current distribution: {entropy(np.squeeze(p, -1))}")
+            return 1
+
     return (new_entropy - entropy_small)**2
 
 
@@ -275,13 +285,16 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
     :return: the probability distribution from the big model, transformed to approximate the entropy of the small model
     """
     # change the entropy of the big probability distribution to make it more similar to the entropy of the smaller model
+
     p = bigprobs.astype('float64')
+    big_entropy = entropy(bigprobs)
     p = np.expand_dims(p, 1)  # unsqueeze p (optimizer wants (n,1))
 
-    small_entropy = mean_entropy
+    small_entropy = big_entropy - mean_entropy
+
     bounds = [(0, upper_bound)]
 
-    solution = minimize(fun=f, x0=1, bounds=bounds, args=(p, small_entropy)) # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
+    solution = minimize(fun=f, x0=1, bounds=bounds, args=(p, small_entropy))  # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
     new_z = sum(p**solution.x)
     transformed_p = (p**solution.x) / new_z
     transformed_p = np.squeeze(transformed_p, 1)  # squeeze away the dimension we needed for the optimizer
@@ -289,6 +302,8 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
 
 
 def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
+
+    bigprobs = np.expand_dims(bigprobs, 0)
 
     sorted_indices = bigprobs.argsort()[:, :, ::-1]
 
@@ -335,10 +350,13 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
     final_probs = sorted_big_probs[depth, rows, sorted_indices]  # unsort the probabilities
 
+    final_probs = np.squeeze(final_probs, 0)
+
     return final_probs
 
 
-def transformations(bigprobs, indices, mean_features, bucket_indices, functions, upper_bound, pred_labels=None):
+def transformations(bigprobs, indices, mean_features, bucket_indices, functions, num_test_samples, upper_bound,
+                    pred_labels=None):
     """
     1. fill up distributions
     2. create boolean array with pred labels ->
@@ -349,13 +367,18 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
     :param mean_features: dictionary with mean features
     :return:
     """
-    print(f"entropy big probs first distribution: {entropy(bigprobs[0][0], axis=-1)}")
+
+    print(f"mean features: {mean_features}")
+    print(f"type mean features: {type(mean_features)}")
+    #print(f"entropy big probs first distribution: {entropy(bigprobs[0][0], axis=-1)}")
+    #print(f"entropy big probs second distribution: {entropy(bigprobs[0][1], axis=-1)}")
 
     print("  => FILL UP DISTRIBUTIONS")
     filled_up_probs = fill_multiple_distributions(bigprobs, indices)
     print("  => DONE FILLING UP DISTRIBUTIONS")
 
     transformed_probs = filled_up_probs.copy()
+    print(f"transformed probs shape: {transformed_probs.shape}")
 
     if pred_labels is not None:
         unique_labels = np.unique(pred_labels)
@@ -367,27 +390,29 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
             means = []
             for j in range(len(num_features)):
                 means.extend([mean_features[f"{functions[j].__name__}_{i}_{label}"] for i in range(num_features[j])])
+
             print(f"means for label {label}: {means}")
 
             print(f"  => FIRST TRANSFORMATION")
 
             print(f"means[num_features[0]:]: {means[num_features[0]:]}")
 
-            transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
-                                                                          transformed_probs[pred_labels == label],
-                                                                          means[num_features[0]:], upper_bound)
-            # print(f"  => SECOND TRANSFORMATION")
-            #
-            # transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
-            #                                                   means[:num_features[0]], bucket_indices)
+            #transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
+            #                                                              transformed_probs[pred_labels == label],
+            #                                                              means[num_features[0]:], upper_bound)
+            print(f"  => SECOND TRANSFORMATION")
+
+            transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
+                                                              means[:num_features[0]], bucket_indices)
             print(f"  => DONE!")
 
-            print(f"entropy big probs first distribution: {entropy(transformed_probs[0][0], axis=-1)}")
+        #print(f"entropy big probs first distribution after trans: {entropy(transformed_probs[0][0], axis=-1)}")
+        #print(f"entropy big probs second distribution after trans: {entropy(transformed_probs[0][1], axis=-1)}")
 
     return transformed_probs, filled_up_probs
 
 
-def evaluate_transformations(transformed_probs, bigprobs, smallprobs, small_indices):
+def get_distances(transformed_probs, bigprobs, smallprobs, small_indices):
     """
     1. Fill up distributions from the smaller model
     2. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
@@ -404,15 +429,19 @@ def evaluate_transformations(transformed_probs, bigprobs, smallprobs, small_indi
     filled_up_small_probs = fill_multiple_distributions(smallprobs, small_indices)
     print("  => DONE FILLING UP SMALL DISTRIBUTIONS")
 
-    _, dist_trans, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.2)
-    _, dist_big, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.2)
+    _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.2)
+    _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.2)
 
-    print(f"shape dist_trans: {dist_trans.shape}")
-    print(f"shape dist_big: {dist_big.shape}")
+    print(f"shape dist_trans tmp: {dist_trans_tmp.size()}")
+    print(f"shape dist_big tmp: {dist_big_tmp.size()}")
 
-    print(f"type dist_big: {type(dist_big)}")
-    print(f"dtype dist_trans: {dist_trans.dtype}")
+    print(f"type dist_big tmp: {type(dist_big_tmp)}")
+    print(f"dtype dist_trans tmp: {dist_trans_tmp.dtype}")
 
+    return dist_trans_tmp, dist_big_tmp
+
+
+def get_mean_distances(dist_trans, dist_big):
     mean_dist_trans = torch.mean(dist_trans).item()  # TODO: should I use axis=-1 here?
     mean_dist_big = torch.mean(dist_big).item()  # TODO: should I use axis=-1 here?
 

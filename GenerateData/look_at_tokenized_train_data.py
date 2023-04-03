@@ -1,11 +1,45 @@
 import pickle
+import numpy as np
 import pandas as pd
 import torch
 from datasets import load_dataset, Dataset
-#
-data = pickle.load(open("../train_data/train_big.pkl", "rb"))
+import sys
 
-print(data.shape)
+sys.path.append('../')
+from GetClusters.differenceMetrics import bucket_diff_top_k
+
+data_small = pickle.load(open("../new_data/small_10000_0.pkl", "rb"))
+
+data_big = pickle.load(open("../new_data/big_10000_0.pkl", "rb"))
+
+features = pickle.load(open("../new_data/features_10000_0.pkl", "rb"))
+
+print(f"data small shape: {data_small.size()}")
+print(f"data big shape: {data_big.size()}")
+print(f"features shape: {features.size()}")
+
+print(f"data small first distribution: {data_small[0][0][:50]}")
+print(f"data big first distribution: {data_big[0][0][:50]}")
+
+bucket_difference = torch.sum(data_big[0][1][:10]) - torch.sum(data_small[0][1][:10])
+
+print(f"bucket difference: {bucket_difference}, should be the same as feature: {features[0][1][0]}")
+
+print(f"first three feature vectors in file:\n {features[:1, :3]}")
+
+bucket_diffs = bucket_diff_top_k(data_small, data_big, indices=[10, 35])
+
+print(f"bucket diffs shape: {bucket_diffs.shape}")
+
+print(f"data type bucket diffs: {type(bucket_diffs[0])}")
+
+print(f"bucket diffs [0][0]: {bucket_diffs[0][0]}")
+
+ind = np.nonzero(bucket_diffs == 0.012411028146743774)
+
+print(f"index: {ind}")
+
+
 # #data2 = pickle.load(open("../train_data/train_big_100000_1.pkl", "rb"))
 #
 # data3 = pickle.load(open("../train_data/train_big_tmp_1000_0.pkl", "rb"))

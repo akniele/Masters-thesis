@@ -69,12 +69,12 @@ def make_predictions(num_classes, num_sheets):
     with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
         probs1 = pickle.load(f)
     probs1 = probs1.numpy()
-    df_tmp = prepare_training_data(probs1, num_sheets)
+    df = prepare_training_data(probs1, num_sheets)
 
-    if type(df) is bool:
-        df = df_tmp
-    else:
-        df = pd.concat([df, df_tmp], axis=0, ignore_index=True)
+    # if type(df) is bool:
+    #     df = df_tmp
+    # else:
+    #     df = pd.concat([df, df_tmp], axis=0, ignore_index=True)
 
     print(f"This is what the training data looks like:\n {df.iloc[[0, 1, 63, 64, 65]]}")
 

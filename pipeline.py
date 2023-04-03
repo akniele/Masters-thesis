@@ -16,7 +16,8 @@ from sklearn.metrics import recall_score
 import numpy as np
 from tqdm import tqdm
 import math
-
+import torch
+import scipy.stats as stats
 
 from GetClusters.clustering import k_means_clustering, label_distribution
 from GetClusters.clustering import find_optimal_n
@@ -29,7 +30,7 @@ from GetClusters.featureVector import create_and_save_feature_vector
 from ClassifierFiles import train_and_evaluate_classifier
 from GetClusters.featureVector import fill_all_distributions_and_create_features
 from ClassifierFiles.train_and_evaluate_classifier import make_predictions
-from Transformation.transformation import transformations, evaluate_transformations
+from Transformation.transformation import transformations, get_distances, get_mean_distances
 
 
 sys.path.insert(1, '../Non-Residual-GANN')
@@ -41,9 +42,10 @@ from GenerateData.load_data_new import generateData
 # from Transformation.transformation import compare_distributions
 
 
-def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr,
+def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_test_samples,
              generate_data=False, train_classifier=False):
-    NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
+
+    NUM_TRAIN_SHEETS = 10_000  # for creating feature vectors, and training classifier
     N_CLUSTERS = num_clusters  # number of clusters used for clustering
 
     # for classifier:
@@ -54,7 +56,7 @@ def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr,
 
     if generate_data:
         print("  => GENERATING DATA AND FEATURE VECTORS")
-        generateData(functions, bucket_indices, num_samples=100000, truncate=True, topk=256, save=True)
+        generateData(functions, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True)
 
     print("  => LOADING SCALED FEATURES FOR CLUSTERING")
     scaled_features = load_feature_vector(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
@@ -64,8 +66,20 @@ def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr,
 
     print("  => CLUSTERING")
     labels = k_means_clustering(scaled_features, N_CLUSTERS)
-    #label_distribution = label_distribution(N_CLUSTERS, labels)
-    #print(f"label distribution: {label_distribution}")
+
+    labels_distribution = label_distribution(N_CLUSTERS, labels)
+    print(f"label distribution: {labels_distribution}")
+
+    # Chi-Square Goodness of Fit Test
+    chi_square_test_statistic, p_value = stats.chisquare(
+        labels_distribution, [(sum(labels_distribution)/len(labels_distribution)) for i in range(len(labels_distribution))])
+
+    # chi square test statistic and p value
+    print(f"chi_square_test_statistic is : {chi_square_test_statistic}")
+    print(f"p_value : {p_value:.3e}")
+
+    # find Chi-Square critical value
+    print(stats.chi2.ppf(1 - 0.05, df=2))
 
     print("  => GET MEAN FEATURES FROM TRAINING DATA")
     dict_means = get_means_from_training_data(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS,
@@ -78,16 +92,20 @@ def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr,
         pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
             NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS)
 
-    new_pred_labels = make_predictions(3, num_sheets=NUM_TRAIN_SHEETS)
+    new_pred_labels = make_predictions(3, num_sheets=num_test_samples)
 
     print(f"pred labels: {new_pred_labels[:50]}")
+
+    new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
+
+    print(f"new shape of pred labels: {new_pred_labels.shape}")
 
     print("  => LOAD DATA FOR TRANSFORMATION")
 
     with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
         bigprobs = pickle.load(f)
 
-    bigprobs = bigprobs[:500].numpy()
+    bigprobs = bigprobs[:num_test_samples].numpy()
 
     #max_probs = np.amax(bigprobs, axis=-1)
     #min_of_max_probs = np.amin(max_probs)
@@ -99,43 +117,50 @@ def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr,
     with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
         indices1 = pickle.load(g)
 
-    indices1 = indices1[:500].numpy()
+    indices1 = indices1[:num_test_samples].numpy()
 
     print("  => LOAD DATA FOR EVALUATION")
 
     with open(f"train_data/train_small_100000_9.pkl", "rb") as f:
         smallprobs = pickle.load(f)
 
-    smallprobs = smallprobs[:500].numpy()
+    smallprobs = smallprobs[:num_test_samples].numpy()
 
     with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
         indices0 = pickle.load(g)
 
-    indices0 = indices0[:500].numpy()
+    indices0 = indices0[:num_test_samples].numpy()
 
     bucket_indices.insert(0, 0)
-    bucket_indices.append(16384)
+    bucket_indices.append(16_384)
 
-    scores = []
+    trans_distances = torch.zeros((num_test_samples, 64, 1))
+    original_distances = torch.zeros((num_test_samples, 64, 1))
 
-    for i in tqdm(range(5)):
-        transformed_probs, filled_up_probs = transformations(bigprobs[i*100:(i+1)*100], indices1[i*100:(i+1)*100],
-                                                             dict_means, bucket_indices, functions,
+    for i in tqdm(range(num_test_samples//100)):  # so if num_test_samples == 500, then the loop has 5 iterations
+        transformed_probs, original_probs = transformations(bigprobs[i*100:(i+1)*100], indices1[i*100:(i+1)*100],
+                                                             dict_means, bucket_indices, functions, num_test_samples,
                                                              upper_bound=130,
                                                              pred_labels=new_pred_labels[i*100:(i+1)*100])
 
         print(f"shape transformed_probs: {transformed_probs.shape}")
         print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
 
-        score = evaluate_transformations(transformed_probs, filled_up_probs,
+        trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
                                          smallprobs[i*100:(i+1)*100], indices0[i*100:(i+1)*100])
 
-        scores.append(score)
+        trans_distances_tmp = torch.unsqueeze(trans_distances_tmp, -1)
+        original_distances_tmp = torch.unsqueeze(original_distances_tmp, -1)
 
-    return statistics.mean(scores)
+        trans_distances[i*100:(i+1)*100] = trans_distances_tmp
+        original_distances[i * 100:(i + 1) * 100] = original_distances_tmp
+
+    score = get_mean_distances(trans_distances, original_distances)
+
+    return score
 
 
-def generate_data(functions, bucket_indices, num_samples=100000, truncate=True, topk=256, save=True):
+def generate_data(functions, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True):
     print("  => GENERATING DATA AND FEATURE VECTORS")
     generateData(functions, bucket_indices, num_samples=num_samples, truncate=truncate, topk=topk, save=save)
 
@@ -145,7 +170,7 @@ if __name__ == "__main__":
     FUNCTIONS = [bucket_diff_top_k, get_entropy_feature]
     print("  => GENERATING DATA AND FEATURE VECTORS")
     generateData(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
-                 num_samples=100000, truncate=True, topk=256, save=True)
+                 num_samples=100_000, truncate=True, topk=256, save=True)
 
     """Load data"""
     #NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
