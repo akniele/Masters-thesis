@@ -54,18 +54,35 @@ def transformProbabilities(bigprobs):
 
 # Fredrik's metric, for this purpose timeStepDiffs and sampleDiffs returns the same
 def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.02):
-    dist1 = torch.FloatTensor(dist1)
-    dist2 = torch.FloatTensor(dist2)
+    # print("  => IN HERE NOW!")
+    # print(f"dist1 type: {type(dist1)}")
+    # print(f"distr1 shape: {dist1.shape}")
+    # print(f"dist1 first couple of numbers: {dist1[0][0][:50]}")
+    # print(f"dist2 type: {type(dist2)}")
+    # print(f"distr2 shape: {dist2.shape}")
+    # print(f"dist2 first couple of numbers: {dist2[0][0][:50]}")
+    # dist1 = torch.from_numpy(dist1)
+    # dist2 = torch.from_numpy(dist2)
+    # dist1 = torch.FloatTensor(dist1)
+    # dist2 = torch.FloatTensor(dist2)
     probSums = dist1 + dist2
-    print(f"size probSums: {probSums.size()}")
-    belowThreshold = torch.where(probSums < probScaleLimit, 1, 0)
+    # print(f"size probSums: {probSums.shape}")
+    belowThreshold = np.where(probSums < probScaleLimit, 1, 0)
+    # print(" calculated belowthreshold")
     belowThresholdMask = (belowThreshold / probScaleLimit) * probSums
+    # print(" calculated belowthreshold mask")
     overThresholdMask = 1 - belowThreshold
+    # print(" calculated overthreshold mask")
     weightMask = belowThresholdMask + overThresholdMask
+    # print(" calculated weight mask")
+    # print(f" shape weightMask: {weightMask.shape}")
 
-    absDiff = torch.abs(dist1 - dist2) * weightMask
-    timeStepDiffs = torch.sum(absDiff, dim=-1)
-    sampleDiffs = torch.sum(timeStepDiffs, dim=-1)
+    absDiff = np.abs(dist1 - dist2) * weightMask
+    # print(" absDiff")
+    timeStepDiffs = np.sum(absDiff, axis=-1)
+    # print("time step diffs")
+    sampleDiffs = np.sum(timeStepDiffs, axis=-1)
+    # print("sample diffs")
     return absDiff, timeStepDiffs, sampleDiffs
 
 
@@ -305,7 +322,7 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
     bigprobs = np.expand_dims(bigprobs, 0)
 
-    sorted_indices = bigprobs.argsort()[:, :, ::-1]
+    sorted_indices = np.argsort(bigprobs, axis=-1, kind='stable')[:, :, ::-1]
 
     depth = np.arange(len(bigprobs))
     depth = np.expand_dims(depth, 1)
@@ -348,7 +365,8 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
                                                      np.expand_dims(target_transformation[:, :, i] /
                                                                     (bucket_indices[i + 1] - index), -1)
 
-    final_probs = sorted_big_probs[depth, rows, sorted_indices]  # unsort the probabilities
+    final_probs = np.zeros(sorted_big_probs.shape)  # TODO: Check if this, and the unsorting, does what it is supposed to!
+    final_probs[depth, rows, sorted_indices] = sorted_big_probs  # unsort the probabilities
 
     final_probs = np.squeeze(final_probs, 0)
 
@@ -393,21 +411,45 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
 
             print(f"means for label {label}: {means}")
 
-            print(f"  => FIRST TRANSFORMATION")
+            for function in functions:
 
-            print(f"means[num_features[0]:]: {means[num_features[0]:]}")
+                if function.__name__ == "get_entropy_feature":
+                    print("  => ENTROPY TRANSFORMATION")
+                    transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
+                                                                                  transformed_probs[pred_labels == label],
+                                                                                  means[num_features[0]:], upper_bound)
+                elif function.__name__ == "bucket_diff_top_k":
+                    print("  => BUCKET PROBABILITY TRANSFORMATION")
 
-            #transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
-            #                                                              transformed_probs[pred_labels == label],
-            #                                                              means[num_features[0]:], upper_bound)
-            print(f"  => SECOND TRANSFORMATION")
+                    transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
+                                                                      means[:num_features[0]], bucket_indices)
 
-            transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
-                                                              means[:num_features[0]], bucket_indices)
-            print(f"  => DONE!")
+        print(f"  => FINISHED TRANSFORMATIONS!")
 
         #print(f"entropy big probs first distribution after trans: {entropy(transformed_probs[0][0], axis=-1)}")
         #print(f"entropy big probs second distribution after trans: {entropy(transformed_probs[0][1], axis=-1)}")
+
+    else:
+        means = []
+        num_features = [config.function_feature_dict[f"{function.__name__}"] for function in functions]
+        for j in range(len(num_features)):  # len(num_features) tells you how many functions there are
+            means.extend([mean_features[f"{functions[j].__name__}_{i}"] for i in range(num_features[j])])
+
+        'bucket_diff_top_k_0_0': 0.013314630389263624
+        for function in functions:
+
+            if function.__name__ == "get_entropy_feature":
+                print("  => ENTROPY TRANSFORMATION")
+                transformed_probs = np.apply_along_axis(trans_1, -1, transformed_probs, means[num_features[0]:],
+                                                        upper_bound)
+
+            elif function.__name__ == "bucket_diff_top_k":
+                print("  => BUCKET PROBABILITY TRANSFORMATION")
+                for i in range(config.function_feature_dict["bucket_diff_top_k"]):
+                    transformed_probs = trans_0(transformed_probs, means[:num_features[0]], bucket_indices)
+
+        print(f"  => FINISHED TRANSFORMATIONS!")
+
 
     return transformed_probs, filled_up_probs
 
@@ -429,11 +471,12 @@ def get_distances(transformed_probs, bigprobs, smallprobs, small_indices):
     filled_up_small_probs = fill_multiple_distributions(smallprobs, small_indices)
     print("  => DONE FILLING UP SMALL DISTRIBUTIONS")
 
-    _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.2)
-    _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.2)
+    _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.02)
+    print("  => DONE WITH FIRST DISTANCE ARRAY")
+    _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.02)
 
-    print(f"shape dist_trans tmp: {dist_trans_tmp.size()}")
-    print(f"shape dist_big tmp: {dist_big_tmp.size()}")
+    print(f"shape dist_trans tmp: {dist_trans_tmp.shape}")
+    print(f"shape dist_big tmp: {dist_big_tmp.shape}")
 
     print(f"type dist_big tmp: {type(dist_big_tmp)}")
     print(f"dtype dist_trans tmp: {dist_trans_tmp.dtype}")
@@ -442,8 +485,8 @@ def get_distances(transformed_probs, bigprobs, smallprobs, small_indices):
 
 
 def get_mean_distances(dist_trans, dist_big):
-    mean_dist_trans = torch.mean(dist_trans).item()  # TODO: should I use axis=-1 here?
-    mean_dist_big = torch.mean(dist_big).item()  # TODO: should I use axis=-1 here?
+    mean_dist_trans = np.mean(dist_trans).item()  # TODO: should I use axis=-1 here?
+    mean_dist_big = np.mean(dist_big).item()  # TODO: should I use axis=-1 here?
 
     print(f" mean_dist_trans: {mean_dist_trans}")
     print(f" mean_dist_big: {mean_dist_big}")

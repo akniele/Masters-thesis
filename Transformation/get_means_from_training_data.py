@@ -19,16 +19,21 @@ def get_means_from_training_data(functions, num_features, num_sheets, labels=Non
 
     if labels is not None:
         labels_array = np.array(labels)
+        print(f"shape labels array: {labels_array.shape}")
         unique_labels = np.unique(labels_array)  # get number of unique elements in labels array
 
         completed_columns = 0
         columns_to_add = 0
         for function in functions:
             columns_to_add += config.function_feature_dict[f"{function.__name__}"]
-            for i in range(config.function_feature_dict[f"{function.__name__}"]):
-                for label in unique_labels:  # loop with range number of unique elements
-                    bool_labels = labels_array == label  # first turn labels into booleans
+            for label in unique_labels:  # loop with range number of unique elements
+                bool_labels = labels_array == label  # first turn labels into booleans
+                #features_for_boxplot = dict()
+                for i in range(config.function_feature_dict[f"{function.__name__}"]):
                     mean_feature = np.mean(feature_vector[:, i+completed_columns], axis=0, where=bool_labels)  # then for each one, calculate the mean separately
+                    # -------------- box plot -----------------------------------------------#
+                    # features_tmp = feature_vector[:, i+completed_columns]
+                    # features_for_boxplot[f"{i}_{function.__name__}"] = features_tmp[bool_labels]
                     mean_dict[f"{function.__name__}_{i}_{label}"] = mean_feature
             completed_columns += columns_to_add
             columns_to_add = 0

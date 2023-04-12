@@ -18,6 +18,7 @@ from tqdm import tqdm
 import math
 import torch
 import scipy.stats as stats
+import matplotlib.pyplot as plt
 
 from GetClusters.clustering import k_means_clustering, label_distribution
 from GetClusters.clustering import find_optimal_n
@@ -34,7 +35,7 @@ from Transformation.transformation import transformations, get_distances, get_me
 
 
 sys.path.insert(1, '../Non-Residual-GANN')
-from GenerateData.load_data_new import generateData
+from GenerateData.data_sorted_by_big_model import generateData
 # from Transformation.get_means_from_training_data import get_mean_entropy_from_training_data
 # from Transformation.transformation import classifyProbabilityIntoFamily, create_prediction_data, transformProbabilities
 # from Transformation.transformation import trans0
@@ -42,7 +43,7 @@ from GenerateData.load_data_new import generateData
 # from Transformation.transformation import compare_distributions
 
 
-def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_test_samples,
+def train(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_test_samples,
              generate_data=False, train_classifier=False):
 
     NUM_TRAIN_SHEETS = 10_000  # for creating feature vectors, and training classifier
@@ -100,6 +101,10 @@ def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr, nu
 
     print(f"new shape of pred labels: {new_pred_labels.shape}")
 
+    return new_pred_labels, dict_means
+
+
+def test(new_pred_labels, dict_means, num_test_samples, bucket_indices, functions):
     print("  => LOAD DATA FOR TRANSFORMATION")
 
     with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
@@ -134,43 +139,58 @@ def pipeline(functions, bucket_indices, num_clusters, batch_size, epochs, lr, nu
     bucket_indices.insert(0, 0)
     bucket_indices.append(16_384)
 
-    trans_distances = torch.zeros((num_test_samples, 64, 1))
-    original_distances = torch.zeros((num_test_samples, 64, 1))
+    return bigprobs, smallprobs, indices1, indices0, new_pred_labels, num_test_samples
 
-    for i in tqdm(range(num_test_samples//100)):  # so if num_test_samples == 500, then the loop has 5 iterations
-        transformed_probs, original_probs = transformations(bigprobs[i*100:(i+1)*100], indices1[i*100:(i+1)*100],
-                                                             dict_means, bucket_indices, functions, num_test_samples,
-                                                             upper_bound=130,
-                                                             pred_labels=new_pred_labels[i*100:(i+1)*100])
-
-        print(f"shape transformed_probs: {transformed_probs.shape}")
-        print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
-
-        trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
-                                         smallprobs[i*100:(i+1)*100], indices0[i*100:(i+1)*100])
-
-        trans_distances_tmp = torch.unsqueeze(trans_distances_tmp, -1)
-        original_distances_tmp = torch.unsqueeze(original_distances_tmp, -1)
-
-        trans_distances[i*100:(i+1)*100] = trans_distances_tmp
-        original_distances[i * 100:(i + 1) * 100] = original_distances_tmp
-
-    score = get_mean_distances(trans_distances, original_distances)
-
-    return score
+    #for i in tqdm(range(num_test_samples//100)):  # so if num_test_samples == 500, then the loop has 5 iterations
 
 
 def generate_data(functions, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True):
     print("  => GENERATING DATA AND FEATURE VECTORS")
     generateData(functions, bucket_indices, num_samples=num_samples, truncate=truncate, topk=topk, save=save)
 
+import numpy as np
 
 if __name__ == "__main__":
-    BUCKET_INDICES = [10, 35]
-    FUNCTIONS = [bucket_diff_top_k, get_entropy_feature]
-    print("  => GENERATING DATA AND FEATURE VECTORS")
-    generateData(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
-                 num_samples=100_000, truncate=True, topk=256, save=True)
+
+    with open(f"train_data/train_small_100000_0.pkl", "rb") as f:
+        bigprobs = pickle.load(f)
+
+    print('Datatype bigprobs:', bigprobs.dtype)
+    print(f"bigprobs:\n {bigprobs[0, 0, :]}")
+
+    with open(f"final_data/small_10000_0.pkl", "rb") as g:
+        bigprobs_new = pickle.load(g)
+        print('Datatype bigprobs_new:', bigprobs_new.dtype)
+    print(f"bigprobs_new: \n  {bigprobs_new[0, 0, :]}")
+
+    with open(f"final_data/indices_10000_0.pkl", "rb") as h:
+        sorted_indices = pickle.load(h)
+
+
+    # generate data
+    # BUCKET_INDICES = [10, 35]
+    # FUNCTIONS = [bucket_diff_top_k, get_entropy_feature]
+    # print("  => GENERATING DATA AND FEATURE VECTORS")
+    # generateData(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
+    #              num_samples=100_000, truncate=True, topk=256, save=True)
+
+    # functions = [bucket_diff_top_k, get_entropy_feature]
+    # NUM_TRAIN_SHEETS = 10_000
+    #
+    # data = load_feature_vector(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=False)
+    # print(f" feature vector shape: {data.shape}")
+    #
+    # first_column = data[:, 0]
+    # second_column = data[:, 1]
+    # third_column = data[:, 2]
+    #
+    # fig = plt.figure(figsize=(10, 7))
+    #
+    # # Creating plot
+    # plt.boxplot(data[:, :-1])
+    #
+    # # show plot
+    # plt.savefig("example_plot.png")
 
     """Load data"""
     #NUM_TRAIN_SHEETS = 10000  # for creating feature vectors, and training classifier
