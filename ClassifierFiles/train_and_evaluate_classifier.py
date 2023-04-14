@@ -71,13 +71,6 @@ def make_predictions(num_classes, num_sheets):
     probs1 = probs1.numpy()
     df = prepare_training_data(probs1, num_sheets)
 
-    # if type(df) is bool:
-    #     df = df_tmp
-    # else:
-    #     df = pd.concat([df, df_tmp], axis=0, ignore_index=True)
-
-    #print(f"This is what the training data looks like:\n {df.iloc[[0, 1, 63, 64, 65]]}")
-
     print(f"length of pandas frame: {df.shape[0]}")
 
     model = BertClassifier(NUM_CLASSES)
@@ -89,5 +82,3 @@ def make_predictions(num_classes, num_sheets):
     pred_labels = predict_label(model, df)
 
     return pred_labels
-
-

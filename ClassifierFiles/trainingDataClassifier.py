@@ -13,7 +13,7 @@ def prepare_training_data(probs1, num_sheets, labels=None):
             sequence.append(samples)
         formatted_data.append(sequence)
 
-    if labels != None:
+    if labels is not None:
         formatted_labels = []
         for i in range(num_sheets):
             formatted_labels.append([])

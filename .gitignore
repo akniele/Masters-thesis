@@ -2,7 +2,7 @@ scaled_features.pkl
 Data/
 NotUsed/
 acc_loss_plot.png
-example_plot.png
+NotUsed/example_plot.png
 loss_plot.png
 matrix.png
 WikitextDataset-16384-64-ls-100-Train-10pct.pkl

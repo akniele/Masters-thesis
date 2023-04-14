@@ -22,8 +22,8 @@ more closely resemble the probability distributions of a different model.
 
 
 BATCH_SIZE = 8
-EPOCHS = 5
-LEARNING_RATE = 1e-5
+EPOCHS = 20
+LEARNING_RATE = 1e-4
 DEVICE = "cuda:0"
 SEQUENCE_LENGTH = 64
 VOCAB_LENGTH = 16384
@@ -31,6 +31,7 @@ VOCAB_AFTER_REDUCTION = 257
 N_TEST_SAMPLES = 500
 LOSS_PLOT_NAME = f"loss_plot.png"
 NUM_TRAIN_SHEETS = 10_000
+
 
 def main():
     print("  => LOADING MODEL")

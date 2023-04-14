@@ -12,8 +12,6 @@ import tqdm
 from torch.utils.data import Dataset as DatasetPytorch
 from GetClusters.differenceMetrics import bucket_diff_top_k
 import numpy as np
-from sys import getsizeof
-import psutil
 import config
 
 BIG_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH8-BIG-BIG-A8-R2-1670318134.3765588/"

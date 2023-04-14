@@ -31,19 +31,10 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
         with tqdm(train_dataloader, total=(len(train_dataloader)), unit="batch", desc="Train epoch %i" % epoch_num) as batches:
             for train_input, train_label in batches:
                 train_label = train_label.to(device)
-                # print(f"train label size: {train_label.size()}")
                 input_embeds = train_input.to(device)
-                #print(f"size input embeds: {input_embeds.size()}")
-                # print(f"input embeds size: {input_embeds.size()}")
 
                 output = model(inputs_embeds=input_embeds)
                 output = torch.permute(output, (0, 2, 1))
-                # print(f"output size: {output.size()}")
-                #
-                # print(f" length of train_label.long(): {train_label.long().size()}")
-                #
-                # print(f" train_label.long(): {train_label.long()}")
-                # print(f" train_label: {train_label}")
 
                 batch_loss = criterion(output, train_label.long())
 

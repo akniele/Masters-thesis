@@ -10,9 +10,6 @@ class Dataset(torch.utils.data.Dataset):
         self.probs = [text for text in df['text']]
         self.probs = torch.FloatTensor(np.array(self.probs))
 
-    # def classes(self):
-    #     return self.labels
-
     def __len__(self):
         return len(self.labels)
 

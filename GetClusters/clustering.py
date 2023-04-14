@@ -5,18 +5,9 @@
 import numpy as np
 from kneed import KneeLocator
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-from sklearn.metrics import calinski_harabasz_score
-from sklearn.cluster import AgglomerativeClustering
 import pandas as pd
 import plotly.express as px
 from collections import defaultdict
-
-
-def agglomerative_clustering(feature_vector, n_clusters):
-    clustering = AgglomerativeClustering(n_clusters=n_clusters).fit(feature_vector)
-    labels = clustering.labels_
-    return labels
 
 
 def k_means_clustering(feature_vector, n_clusters):
@@ -56,20 +47,7 @@ def find_optimal_n(feature_vector):
         )
     elbow = kl.elbow
 
-    # # silhouette coefficient
-    # silhouette_coefficients = []
-    # calinski_harabasz = []
-    # for k in range(2, 11):
-    #     kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-    #     kmeans.fit(feature_vector)
-    #     score_silhouette = silhouette_score(feature_vector, kmeans.labels_)
-    #     silhouette_coefficients.append(score_silhouette)
-    #     score_calinski = calinski_harabasz_score(feature_vector, kmeans.labels_)
-    #     calinski_harabasz.append(score_calinski)
-    # max_silhouette = np.argmax(silhouette_coefficients) +2
-    # max_calinski = np.argmax(calinski_harabasz) +2
-
-    return elbow #, max_silhouette, max_calinski
+    return elbow
 
 
 """Check the distribution of cluster labels"""
@@ -100,7 +78,8 @@ def visualize_label_distribution(labels):
 CLUSTER_TO_VISUALIZE = 1  # first check how many clusters were used for clustering algorithm
 SHEET_TO_VISUALIZE = 0  # there are 32 sheets
 
-def visualize_cluster_probs(labels):
+
+def visualize_cluster_probs(labels, probs1, probs0):
     visualization = defaultdict(list)
     for i, sheets in enumerate(probs1[:1]):
         for j, samples in enumerate(sheets):
@@ -125,4 +104,3 @@ def visualize_cluster_probs(labels):
                   range_x=[0, 29], range_y=[1e-7,1], log_y=True)
     fig["layout"].pop("updatemenus")  # optional, drop animation buttons
     fig.show()
-
