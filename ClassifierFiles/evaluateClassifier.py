@@ -18,6 +18,7 @@ def evaluate(model, test_data, num_classes):
     total_acc_test = 0
 
     with torch.no_grad():
+        model.eval()
 
         true_labels = []
         pred_labels = []

@@ -24,6 +24,7 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
         criterion = criterion.cuda()
 
     for epoch_num in range(epochs):
+        model.train()
 
         total_acc_train = 0
         total_loss_train = 0
@@ -55,6 +56,7 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
         total_loss_val = 0
 
         with torch.no_grad():
+            model.eval()
 
             with tqdm(val_dataloader, total=(len(val_dataloader)), unit="batch",
                       desc="Val epoch %i" % epoch_num) as val_batches:

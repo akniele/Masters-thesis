@@ -5,7 +5,7 @@ import sys
 sys.path.insert(1, '../GetClusters')
 import config
 from GetClusters.featureVector import load_feature_vector
-from GetClusters.differenceMetrics import entropy_difference
+from GetClusters.differenceMetrics import get_entropy_feature
 from GetClusters.differenceMetrics import bucket_diff_top_k
 
 # TODO: the parameter associated with bucket_diff_top_k might change, this can't stay hard-coded!
@@ -59,7 +59,7 @@ if __name__ == "__main__":
                        0,
                        1])
 
-    function_list_1 = [bucket_diff_top_k, entropy_difference]
+    function_list_1 = [bucket_diff_top_k, get_entropy_feature]
 
     dict_means = get_means_from_training_data(num_features=4, num_sheets=10000, functions=function_list_1,
                                               labels=labels_matrix)

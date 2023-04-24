@@ -31,7 +31,7 @@ TRUNCATE = False
 
 
 def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUENCE_LENGTH,
-                 num_samples=NUM_SAMPLES, truncate=False, topk=256, save=False):
+                 num_samples=NUM_SAMPLES, truncate=False, topk=256, save=False, features_only=False):
 
     print("  => LOADING BIG MODEL")
     bigModel = loadGenerator(BIG_MODEL_PATH, CHECKPOINT).to(DEVICE)
@@ -52,9 +52,9 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
     data.set_format("torch")
     loader = iter(torch.utils.data.DataLoader(data["data"], batch_size=1))  # added iter so it doesn't load the first data over and over
 
-    num_features = sum([config.function_feature_dict[f"{function.__name__}"] for function in functions])
+    num_features = config.function_feature_dict[f"{functions[0].__name__}"]
 
-    for i in tqdm.tqdm(range(10)):
+    for i in tqdm.tqdm(range(9)):
         print("  => INITIALIZING ARRAYS")
         big_probabilities = torch.zeros((num_samples//10, sequence_length, TOPK))
         small_probabilities = torch.zeros((num_samples//10, sequence_length, TOPK))
@@ -100,52 +100,59 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
             index += 1
 
             if index % 200 == 0 and truncate:
-                print(f"  => SORTING AND TRUNCATING PROBS")
-                small_ordered, small_indx = torch.sort(tmp_small, descending=True)
-                big_ordered, big_indx = torch.sort(tmp_big, descending=True)
+                if not features_only:
+                    print(f"  => SORTING AND TRUNCATING PROBS")
+                    small_ordered, small_indx = torch.sort(tmp_small, descending=True, stable=True)
+                    big_ordered, big_indx = torch.sort(tmp_big, descending=True, stable=True)
 
-                small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
-                big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
+                    small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
+                    big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
 
-                small_probabilities[index-200:index, :, :] = small_ordered
-                big_probabilities[index - 200:index, :, :] = big_ordered
+                    small_probabilities[index-200:index, :, :] = small_ordered
+                    big_probabilities[index - 200:index, :, :] = big_ordered
 
-                small_indices[index-200:index, :, :] = small_indx
-                big_indices[index - 200:index, :, :] = big_indx
+                    small_indices[index-200:index, :, :] = small_indx
+                    big_indices[index - 200:index, :, :] = big_indx
+
+                # print(f"  => CREATING FEATURE VECTOR")
+                # num_features_function = 0
+                # for j in range(len(functions)):
+                #     diffs = functions[j](tmp_small, tmp_big, bucket_indices)
+                #     # if len(diffs.shape) == 2:  # add a dimension for the entropies
+                #     #     diffs = np.expand_dims(diffs, -1)
+                #
+                #     start = num_features_function
+                #     num_features_function += config.function_feature_dict[f"{functions[j].__name__}"]
+                #     print(f"shape bucket_diffs: {diffs.shape}")
+                #     features[index-200:index, :, start:num_features_function] = torch.from_numpy(diffs)
+                #     print(f"shape features: {features.shape}")
+                # print(f"  => DONE CREATING FEATURE VECTOR")
 
                 print(f"  => CREATING FEATURE VECTOR")
-                num_features_function = 0
-                for j in range(len(functions)):
-                    diffs = functions[j](tmp_small, tmp_big, bucket_indices)
-                    if len(diffs.shape) == 2:  # add a dimension for the entropies
-                        diffs = np.expand_dims(diffs, -1)
-
-                    start = num_features_function
-                    num_features_function += config.function_feature_dict[f"{functions[j].__name__}"]
-                    print(f"shape bucket_diffs: {diffs.shape}")
-                    features[index-200:index, :, start:num_features_function] = torch.from_numpy(diffs)
-                    print(f"shape features: {features.shape}")
+                diffs = functions[0](tmp_small, tmp_big, bucket_indices)
+                features[index - 200:index, :, :] = torch.from_numpy(diffs)
                 print(f"  => DONE CREATING FEATURE VECTOR")
 
         if save:
             print("  => SAVING...")
-            with open(f"../pipeline/new_data/big_{num_samples//10}_{i}.pkl", "wb") as f:
-                pickle.dump(big_probabilities, f)
 
-            with open(f"../pipeline/new_data/small_{num_samples//10}_{i}.pkl", "wb") as g:
-                pickle.dump(small_probabilities, g)
+            if not features_only:
+                with open(f"../pipeline/train_data/big_{num_samples//10}_{i}.pkl", "wb") as f:
+                    pickle.dump(big_probabilities, f)
 
-            with open(f"../pipeline/new_data/indices_big_{num_samples//10}_{i}.pkl", "wb") as h:
-                pickle.dump(big_indices, h)
+                with open(f"../pipeline/train_data/small_{num_samples//10}_{i}.pkl", "wb") as g:
+                    pickle.dump(small_probabilities, g)
 
-            with open(f"../pipeline/new_data/indices_small_{num_samples//10}_{i}.pkl", "wb") as k:
-                pickle.dump(small_indices, k)
+                with open(f"../pipeline/train_data/indices_big_{num_samples//10}_{i}.pkl", "wb") as h:
+                    pickle.dump(big_indices, h)
 
-            if i < 10:
-                with open(f"../pipeline/new_data/features_{num_samples//10}_{i}.pkl", "wb") as m:
-                    pickle.dump(features, m)
+                with open(f"../pipeline/train_data/indices_small_{num_samples//10}_{i}.pkl", "wb") as k:
+                    pickle.dump(small_indices, k)
 
-    #return small_probabilities, big_probabilities, small_indices, big_indices, features
+            with open(f"../pipeline/train_data/features_{i}_{functions[0].__name__}.pkl", "wb") as m:
+                pickle.dump(features, m)
+
+    print(f" 5th feature: {features[5, 5, :]}")
 
 
 # if __name__ == "__main__":

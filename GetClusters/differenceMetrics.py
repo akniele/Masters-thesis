@@ -14,7 +14,7 @@ from scipy.stats import entropy # kl-divergence/relative entropy if optional par
 
 def sort_probs(big_probs, small_probs=None):
     big_probs = big_probs.numpy()
-    indices = np.argsort(big_probs, axis=-1)  # get indices to sort by
+    indices = np.argsort(big_probs, axis=-1, kind='stable')  # get indices to sort by
     indices_reverse = indices[:, :, ::-1]
     big_probs_sorted = np.take_along_axis(big_probs, indices_reverse, axis=-1)
     if small_probs is not None:
@@ -25,17 +25,11 @@ def sort_probs(big_probs, small_probs=None):
     return big_probs_sorted
 
 
-def entropy_difference(probs0, probs1):
-    small_entropy = entropy(probs0)
-    big_entropy = entropy(probs1)
-    diff = big_entropy - small_entropy
-    return [diff]
-
-
 def get_entropy_feature(probs0, probs1, indices=None):  # indices is a dummy parameter, not used
     small_entropies = entropy(probs0, axis=-1)
     big_entropies = entropy(probs1, axis=-1)
     entropy_diff = big_entropies - small_entropies
+    entropy_diff = np.expand_dims(entropy_diff, -1)
     return entropy_diff
 
 
@@ -53,8 +47,9 @@ def bucket_diff_top_k(probs0, probs1, indices=None):
     big_sample_sorted, small_sample_sorted, _ = sort_probs(probs1, probs0)
     print(f"big_sample_sorted.shape: {big_sample_sorted.shape}")
     split_probs_big = np.split(big_sample_sorted, indices, axis=-1)
-    print(f"split_probs_big[0].shape: {split_probs_big[0].shape}")
+    print(f"split_probs_big: {split_probs_big}")
     split_probs_small = np.split(small_sample_sorted, indices, axis=-1)
+    print(f"split_probs_small: {split_probs_small}")
 
     def calculate_bucket_diff(distr1, distr0):
         """
@@ -66,9 +61,26 @@ def bucket_diff_top_k(probs0, probs1, indices=None):
         return np.sum(distr1, axis=-1) - np.sum(distr0, axis=-1)
 
     bucket_diffs = np.array(list(map(calculate_bucket_diff, split_probs_big, split_probs_small)))
+    print(f"bucket diffs from function: {bucket_diffs}")
     bucket_diffs = np.moveaxis(bucket_diffs, 0, -1)
 
     return bucket_diffs
+
+
+def get_top_p_difference(probs0, probs1, top_p):  # get differences from training data
+    cumsum0 = np.cumsum(probs0, axis=-1)
+    cumsum1 = np.cumsum(probs1, axis=-1)
+
+    mask0 = cumsum0 >= top_p
+    mask1 = cumsum1 >= top_p
+
+    if np.any(mask0) and np.any(mask1):
+        current_k0 = np.argmax(mask0) + 1
+        current_k1 = np.argmax(mask1) + 1
+        return current_k1 - current_k0
+    else:
+        print("Something went wrong!")
+        return False
 
 
 if __name__ == "__main__":

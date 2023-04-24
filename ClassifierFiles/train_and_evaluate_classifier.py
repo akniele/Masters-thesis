@@ -1,4 +1,4 @@
-from ClassifierFiles.trainingDataClassifier import prepare_training_data, downsampled_training_data
+from ClassifierFiles.trainingDataClassifier import prepare_training_data
 from ClassifierFiles.classifier import BertClassifier
 from ClassifierFiles.trainClassifier import train
 from ClassifierFiles.evaluateClassifier import evaluate

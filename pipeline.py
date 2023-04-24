@@ -10,37 +10,18 @@
 """
 import sys
 import pickle
-import statistics
-from sklearn.metrics import precision_score
-from sklearn.metrics import recall_score
-import numpy as np
-from tqdm import tqdm
-import math
-import torch
 import scipy.stats as stats
-import matplotlib.pyplot as plt
 
 from GetClusters.clustering import k_means_clustering, label_distribution
-from GetClusters.clustering import find_optimal_n
-from GetClusters.differenceMetrics import bucket_diff_top_k
-from GetClusters.differenceMetrics import get_entropy_feature
 from GetClusters.featureVector import load_feature_vector
 from Transformation.get_means_from_training_data import get_means_from_training_data
-from Transformation.fill_up_distributions import fill_distribution
-from GetClusters.featureVector import create_and_save_feature_vector
 from ClassifierFiles import train_and_evaluate_classifier
-from GetClusters.featureVector import fill_all_distributions_and_create_features
 from ClassifierFiles.train_and_evaluate_classifier import make_predictions
-from Transformation.transformation import transformations, get_distances, get_mean_distances
-
-
+from GetClusters.differenceMetrics import bucket_diff_top_k
 sys.path.insert(1, '../Non-Residual-GANN')
-from GenerateData.data_sorted_by_big_model import generateData
-# from Transformation.get_means_from_training_data import get_mean_entropy_from_training_data
-# from Transformation.transformation import classifyProbabilityIntoFamily, create_prediction_data, transformProbabilities
-# from Transformation.transformation import trans0
-# from Transformation.transformation import probability_transformation
-# from Transformation.transformation import compare_distributions
+from GenerateData.load_data_new import generateData
+from Transformation.transformation import transformations, get_distances
+import config
 
 
 def train(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_test_samples,
@@ -55,13 +36,19 @@ def train(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_t
     EPOCHS = epochs
     LR = lr
 
+    NUM_FEATURES = config.function_feature_dict[f"{functions[0].__name__}"]
+
     if generate_data:
         print("  => GENERATING DATA AND FEATURE VECTORS")
-        generateData(functions, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True)
+        generateData(functions, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True,
+                     features_only=True)
 
     print("  => LOADING SCALED FEATURES FOR CLUSTERING")
-    scaled_features = load_feature_vector(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
+    scaled_features = load_feature_vector(functions=functions, num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS,
+                                          scaled=True)
+
     print(f"Shape of scaled features: {scaled_features.shape}")
+
     print(scaled_features[:3])
     print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
 
@@ -71,20 +58,20 @@ def train(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_t
     labels_distribution = label_distribution(N_CLUSTERS, labels)
     print(f"label distribution: {labels_distribution}")
 
-    # Chi-Square Goodness of Fit Test
-    chi_square_test_statistic, p_value = stats.chisquare(
-        labels_distribution, [(sum(labels_distribution)/len(labels_distribution)) for i in range(len(labels_distribution))])
-
-    # chi square test statistic and p value
-    print(f"chi_square_test_statistic is : {chi_square_test_statistic}")
-    print(f"p_value : {p_value:.3e}")
-
-    # find Chi-Square critical value
-    print(stats.chi2.ppf(1 - 0.05, df=2))
+    # # Chi-Square Goodness of Fit Test
+    # chi_square_test_statistic, p_value = stats.chisquare(
+    #     labels_distribution, [(sum(labels_distribution)/len(labels_distribution)) for i in range(len(labels_distribution))])
+    #
+    # # chi square test statistic and p value
+    # print(f"chi_square_test_statistic is : {chi_square_test_statistic}")
+    # print(f"p_value : {p_value:.3e}")
+    #
+    # # find Chi-Square critical value
+    # print(stats.chi2.ppf(1 - 0.05, df=2))
 
     print("  => GET MEAN FEATURES FROM TRAINING DATA")
-    dict_means = get_means_from_training_data(functions=functions, num_features=4, num_sheets=NUM_TRAIN_SHEETS,
-                                              labels=labels)
+    dict_means = get_means_from_training_data(functions=functions, num_features=NUM_FEATURES,
+                                              num_sheets=NUM_TRAIN_SHEETS, labels=labels)
 
     for key, value in dict_means.items():
         print(f"key: {key}\t value:{value}")
@@ -93,7 +80,7 @@ def train(functions, bucket_indices, num_clusters, batch_size, epochs, lr, num_t
         pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
             NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS)
 
-    new_pred_labels = make_predictions(3, num_sheets=num_test_samples)
+    new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples)
 
     print(f"pred labels: {new_pred_labels[:50]}")
 
@@ -131,7 +118,7 @@ def test(new_pred_labels, dict_means, num_test_samples, bucket_indices, function
 
     smallprobs = smallprobs[:num_test_samples].numpy()
 
-    with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
+    with open(f"train_data/indices_small_100000_9.pkl", "rb") as g:
         indices0 = pickle.load(g)
 
     indices0 = indices0[:num_test_samples].numpy()
@@ -144,6 +131,27 @@ def test(new_pred_labels, dict_means, num_test_samples, bucket_indices, function
     #for i in tqdm(range(num_test_samples//100)):  # so if num_test_samples == 500, then the loop has 5 iterations
 
 
+def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
+                           bucket_indices, functions, num_test_samples, new_pred_labels):
+    transformed_probs, original_probs = transformations(bigprobs,
+                                                        indices1,
+                                                        dict_means, bucket_indices, functions, num_test_samples,
+                                                        upper_bound=130,
+                                                        pred_labels=new_pred_labels)
+
+    print(f"shape transformed_probs: {transformed_probs.shape}")
+    print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
+
+    trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
+                                                                smallprobs,
+                                                                indices0)
+
+    trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
+    original_distances_tmp = np.expand_dims(original_distances_tmp, -1)
+
+    return trans_distances_tmp, original_distances_tmp
+
+
 def generate_data(functions, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True):
     print("  => GENERATING DATA AND FEATURE VECTORS")
     generateData(functions, bucket_indices, num_samples=num_samples, truncate=truncate, topk=topk, save=save)
@@ -152,27 +160,27 @@ import numpy as np
 
 if __name__ == "__main__":
 
-    with open(f"train_data/train_small_100000_0.pkl", "rb") as f:
-        bigprobs = pickle.load(f)
-
-    print('Datatype bigprobs:', bigprobs.dtype)
-    print(f"bigprobs:\n {bigprobs[0, 0, :]}")
-
-    with open(f"final_data/small_10000_0.pkl", "rb") as g:
-        bigprobs_new = pickle.load(g)
-        print('Datatype bigprobs_new:', bigprobs_new.dtype)
-    print(f"bigprobs_new: \n  {bigprobs_new[0, 0, :]}")
-
-    with open(f"final_data/indices_10000_0.pkl", "rb") as h:
-        sorted_indices = pickle.load(h)
+    # with open(f"train_data/train_small_100000_0.pkl", "rb") as f:
+    #     bigprobs = pickle.load(f)
+    #
+    # print('Datatype bigprobs:', bigprobs.dtype)
+    # print(f"bigprobs:\n {bigprobs[0, 0, :]}")
+    #
+    # with open(f"final_data/small_10000_0.pkl", "rb") as g:
+    #     bigprobs_new = pickle.load(g)
+    #     print('Datatype bigprobs_new:', bigprobs_new.dtype)
+    # print(f"bigprobs_new: \n  {bigprobs_new[0, 0, :]}")
+    #
+    # with open(f"final_data/indices_10000_0.pkl", "rb") as h:
+    #     sorted_indices = pickle.load(h)
 
 
     # generate data
-    # BUCKET_INDICES = [10, 35]
-    # FUNCTIONS = [bucket_diff_top_k, get_entropy_feature]
-    # print("  => GENERATING DATA AND FEATURE VECTORS")
-    # generateData(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
-    #              num_samples=100_000, truncate=True, topk=256, save=True)
+    BUCKET_INDICES = [10, 35]
+    FUNCTIONS = [bucket_diff_top_k]
+    print("  => GENERATING DATA AND FEATURE VECTORS")
+    generateData(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
+                 num_samples=100_000, truncate=True, topk=256, save=True)
 
     # functions = [bucket_diff_top_k, get_entropy_feature]
     # NUM_TRAIN_SHEETS = 10_000

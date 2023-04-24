@@ -140,6 +140,7 @@ def main():
 
     print("  => TRAINING")
     for epoch in range(EPOCHS):
+        model.train()
 
         total_loss_train = 0
         for bigprobs, smallprobs in tqdm.tqdm(trainLoader):
@@ -162,6 +163,7 @@ def main():
 
         model.train_loss.append(total_loss_train / (len(df_train)*64*VOCAB_AFTER_REDUCTION))
 
+        model.eval()
         total_loss_val = 0
         with torch.no_grad():
             for bigprobs, smallprobs in valLoader:
