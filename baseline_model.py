@@ -12,8 +12,6 @@ from ClassifierFiles.trainingDataClassifier import prepare_training_data
 from Transformation.fill_up_distributions import fill_multiple_distributions
 from Transformation.transformation import get_distances, get_mean_distances
 import ClassifierFiles.plot_acc_and_loss as plot_acc_and_loss
-import time
-from config import timeit
 
 """
 This baseline model maps transforms the probability distributions of one model to

@@ -4,8 +4,8 @@ NotUsed/
 acc_loss_plot.png
 NotUsed/example_plot.png
 distance_unchanged.py
-GenerateData/data_sorted_by_big_model.py
-config.py
+NotUsed/data_sorted_by_big_model.py
+NotUsed/config.py
 check_feature_vector_creation.py
 loss_plot.png
 matrix.png
