@@ -13,7 +13,7 @@ import torch
 """train classifier on big probs and labels from clustering step"""
 
 
-def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, num_sheets):
+def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, num_sheets, function):
     NUM_CLASSES = num_classes
     BATCH_SIZE = batch_size
     EPOCHS = epochs
@@ -50,7 +50,7 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
     print("  => STARTING TRAINING")
     train(model, df_train, df_val, LR, EPOCHS, BATCH_SIZE, num_classes=NUM_CLASSES)
 
-    torch.save(model.state_dict(), f'first_try.pt')
+    torch.save(model.state_dict(), f'{function.__name__ }_{NUM_CLASSES}_{LR}_{EPOCHS}.pt')
 
     print("  => EVALUATING MODEL")
     """test classifier"""

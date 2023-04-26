@@ -1,95 +1,64 @@
-from GetClusters.differenceMetrics import bucket_diff_top_k, get_entropy_feature
-from pipeline import train, test, generate_data
+from GetClusters.differenceMetrics import bucket_diff_top_k
+from GetClusters.differenceMetrics import get_entropy_feature
+from GetClusters.differenceMetrics import get_top_p_difference
+from pipeline import train, load_test_data, transform_and_evaluate
 import time
-from multiprocess import Process, Queue
-import torch
-import numpy as np
-from scipy.stats import entropy
-
-from pipeline import transform_and_evaluate
-from Transformation.transformation import transformations, get_distances, get_mean_distances
-
-
-# def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
-#                            bucket_indices, functions, num_test_samples, new_pred_labels, samp_per_iter, q, i):
-#     transformed_probs, original_probs = transformations(bigprobs[i * samp_per_iter:(i + 1) * samp_per_iter],
-#                                                         indices1[i * samp_per_iter:(i + 1) * samp_per_iter],
-#                                                         dict_means, bucket_indices, functions, num_test_samples,
-#                                                         upper_bound=130,
-#                                                         pred_labels=new_pred_labels[i * samp_per_iter:(i + 1) * samp_per_iter])
-#
-#     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
-#                                                                 smallprobs[i * samp_per_iter:(i + 1) * samp_per_iter],
-#                                                                 indices0[i * samp_per_iter:(i + 1) * samp_per_iter])
-#
-#     trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
-#     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)
-#     q.put((trans_distances_tmp, original_distances_tmp, i))
-
-
-def multi_process(bigprobs, smallprobs, indices1, indices0, new_pred_labels, num_test_samples, dict_means,
-                  bucket_indices, functions, range_multi_processing, samp_per_iter):
-    q = Queue()
-    processes = []
-    trans_distances = np.zeros((num_test_samples, 64, 1))
-    original_distances = np.zeros((num_test_samples, 64, 1))
-    for i in range(range_multi_processing):
-        p = Process(target=transform_and_evaluate, args=(bigprobs, smallprobs, indices1,
-                                                         indices0, dict_means, bucket_indices, functions,
-                                                         num_test_samples, new_pred_labels, samp_per_iter, q, i))
-        processes.append(p)
-        p.start()
-    for p in processes:
-        ret = q.get()  # will block
-        trans_distances[ret[2] * samp_per_iter:(ret[2] + 1) * samp_per_iter] = ret[0]
-        original_distances[ret[2] * samp_per_iter:(ret[2] + 1) * samp_per_iter] = ret[1]
-    for p in processes:
-        p.join()
-
-    return trans_distances, original_distances
+from Transformation.transformation import get_mean_distances
 
 
 if __name__ == "__main__":
-    function = bucket_diff_top_k  # get_entropy_feature
-    BUCKET_INDICES = [10, 35]
-    FUNCTIONS = [function]
-    N_CLUSTERS = 3
-
-    # if FUNCTIONS[0].__name__ == "get_entropy_feature":
-    #     NUM_FEATURES = [1]
-    #
-    # elif FUNCTIONS[0].__name__ == "bucket_diff_top_k":
-    #     NUM_FEATURES = [BUCKET_INDICES + 1]
-    #
-    # elif FUNCTIONS[0].__name__ == ""
-
+    # -------- hyperparameters -------- #
+    function = get_top_p_difference  # get_entropy_feature  # bucket_diff_top_k
+    BUCKET_INDICES = [10, 35]        # if bucket_diff_top_k, choose where buckets should start and end,
+    # NB: 0 and len(distribution) are added automatically later!
+    N_CLUSTERS = 3                   # number of clusters to use for k-means clustering
     BATCH_SIZE = 16
     EPOCHS = 50
     LR = 5e-5
+    GENERATE_DATA = True             # if True, generates probability distributions as training data, and features
+    TRAIN_CLASSIFIER = True          # if True, trains a new classifier
+    N_TEST_SAMPLES = 500             # number of samples used for testing,
+    # each sample consists of a sequence of 64 distributions
+    # ----- end of hyperparameters ----- #
 
-    GENERATE_DATA = False
-    TRAIN_CLASSIFIER = True
+    if function.__name__ == "get_entropy_feature":
+        NUM_FEATURES = [1]
 
-    N_TEST_SAMPLES = 500
+    elif function.__name__ == "bucket_diff_top_k":
+        NUM_FEATURES = [len(BUCKET_INDICES) + 1]
 
-    #generate_data(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES)
+    elif function.__name__ == "get_top_p_difference":
+        NUM_FEATURES = [1]
+
+    else:
+        raise Exception(f"{function.__name__} is not a valid transformation function.")
 
     start = time.perf_counter()
 
-    new_pred_labels, dict_means = train(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
-                     num_clusters=N_CLUSTERS, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR,
-                     num_test_samples=N_TEST_SAMPLES, generate_data=GENERATE_DATA, train_classifier=TRAIN_CLASSIFIER)
+    new_pred_labels, dict_means = train(function=function,
+                                        bucket_indices=BUCKET_INDICES,
+                                        num_clusters=N_CLUSTERS,
+                                        batch_size=BATCH_SIZE,
+                                        epochs=EPOCHS,
+                                        lr=LR,
+                                        num_test_samples=N_TEST_SAMPLES,
+                                        num_features=NUM_FEATURES,
+                                        generate_data=GENERATE_DATA,
+                                        train_classifier=TRAIN_CLASSIFIER)
 
-    bigprobs, smallprobs, indices1, indices0, new_pred_labels, num_test_samples = test(new_pred_labels,
-                                                                                       dict_means,
+    bigprobs, smallprobs, indices1, indices0, new_pred_labels, num_test_samples = load_test_data(new_pred_labels,
                                                                                        num_test_samples=N_TEST_SAMPLES,
-                                                                                       bucket_indices=BUCKET_INDICES,
-                                                                                       functions=FUNCTIONS)
+                                                                                       bucket_indices=BUCKET_INDICES)
 
-    trans_distances, original_distances = transform_and_evaluate(bigprobs, smallprobs, indices1,
-                                                                 indices0, dict_means, bucket_indices=BUCKET_INDICES,
-                                                                 functions=FUNCTIONS, num_test_samples=N_TEST_SAMPLES,
-                                                                 new_pred_labels=new_pred_labels)
+    trans_distances, original_distances = transform_and_evaluate(bigprobs,
+                                                                 smallprobs,
+                                                                 indices1,
+                                                                 indices0,
+                                                                 dict_means,
+                                                                 bucket_indices=BUCKET_INDICES,
+                                                                 function=function,
+                                                                 new_pred_labels=new_pred_labels,
+                                                                 num_features=NUM_FEATURES)
 
     print(f"shape trans_distances: {trans_distances.shape}")
     print(f"original_distances: {original_distances.shape}")
@@ -101,58 +70,3 @@ if __name__ == "__main__":
     end = time.perf_counter()
 
     print(f"elapsed time:{(end - start) / 60} minutes")
-
-
-# if __name__ == "__main__":
-#     BUCKET_INDICES: list = [10, 35]
-#     FUNCTIONS = [bucket_diff_top_k]  # , get_entropy_feature
-#     N_CLUSTERS: int = 3
-#
-#     BATCH_SIZE: int = 16
-#     EPOCHS: int = 50
-#     LR: float = 5e-5
-#
-#     N_TEST_SAMPLES = 6
-#
-#     samp = 2
-#
-#     GENERATE_DATA: bool = False
-#     TRAIN_CLASSIFIER: bool = False
-#
-#     RANGE_MULTI_PROCESSING = N_TEST_SAMPLES//samp
-#
-#     start = time.perf_counter()
-#
-#     new_pred_labels, dict_means = train(functions=FUNCTIONS, bucket_indices=BUCKET_INDICES,
-#                      num_clusters=N_CLUSTERS, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR,
-#                      num_test_samples=N_TEST_SAMPLES, generate_data=GENERATE_DATA, train_classifier=TRAIN_CLASSIFIER)
-#
-#     bigprobs, smallprobs, indices1, indices0, new_pred_labels, num_test_samples = test(new_pred_labels,
-#                                                                                        dict_means,
-#                                                                                        num_test_samples=N_TEST_SAMPLES,
-#                                                                                        bucket_indices=BUCKET_INDICES,
-#                                                                                        functions=FUNCTIONS)
-#
-#
-#
-#     trans_distances, original_distances = multi_process(bigprobs, smallprobs, indices1, indices0,
-#                                                        new_pred_labels, num_test_samples, dict_means,
-#                                                        bucket_indices=BUCKET_INDICES, functions=FUNCTIONS,
-#                                                        range_multi_processing=RANGE_MULTI_PROCESSING,
-#                                                         samp_per_iter=samp)
-#
-#     # trans_distances, original_distances = transform_and_evaluate(bigprobs, smallprobs, indices1,
-#     #                                                              indices0, dict_means, bucket_indices=BUCKET_INDICES,
-#     #                                                              functions=FUNCTIONS, num_test_samples=N_TEST_SAMPLES,
-#     #                                                              new_pred_labels=new_pred_labels)
-#
-#     print(f"shape trans_distances: {trans_distances.shape}")
-#     print(f"original_distances: {original_distances}")
-#
-#     score = get_mean_distances(trans_distances, original_distances)
-#
-#     print(f"final score: {score}")
-#
-#     end = time.perf_counter()
-#
-#     print(f"elapsed time:{(end - start) / 60} minutes")

@@ -151,8 +151,8 @@ def trans_2(probs, mean_k, top_p):  # transform probabilities
         return False
 
 
-def transformations(bigprobs, indices, mean_features, bucket_indices, functions, num_test_samples, upper_bound,
-                    pred_labels=None):
+def transformations(bigprobs, indices, mean_features, num_features, bucket_indices, function,
+                    upper_bound, top_p, pred_labels=None):
     """
     1. fill up distributions
     2. create boolean array with pred labels ->
@@ -166,8 +166,6 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
 
     print(f"mean features: {mean_features}")
     print(f"type mean features: {type(mean_features)}")
-    #print(f"entropy big probs first distribution: {entropy(bigprobs[0][0], axis=-1)}")
-    #print(f"entropy big probs second distribution: {entropy(bigprobs[0][1], axis=-1)}")
 
     print("  => FILL UP DISTRIBUTIONS")
     filled_up_probs = fill_multiple_distributions(bigprobs, indices)
@@ -179,55 +177,55 @@ def transformations(bigprobs, indices, mean_features, bucket_indices, functions,
     if pred_labels is not None:
         unique_labels = np.unique(pred_labels)
 
-        num_features = [config.function_feature_dict[f"{function.__name__}"] for function in functions]
-        print(f"number of features: {num_features}")
-
         for label in tqdm(unique_labels, desc="iterating over labels"):
             means = []
-            for j in range(len(num_features)):
-                means.extend([mean_features[f"{functions[j].__name__}_{i}_{label}"] for i in range(num_features[j])])
+            for j in range(num_features):
+                means.extend([mean_features[f"{function.__name__}_{j}_{label}"]])
 
             print(f"means for label {label}: {means}")
 
-            for function in functions:
+            if function.__name__ == "get_entropy_feature":
+                print("  => ENTROPY TRANSFORMATION")
+                transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
+                                                                              transformed_probs[pred_labels == label],
+                                                                              means[:1], upper_bound)
+            elif function.__name__ == "bucket_diff_top_k":
+                print("  => BUCKET PROBABILITY TRANSFORMATION")
 
-                if function.__name__ == "get_entropy_feature":
-                    print("  => ENTROPY TRANSFORMATION")
-                    transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
-                                                                                  transformed_probs[pred_labels == label],
-                                                                                  means[:1], upper_bound)
-                elif function.__name__ == "bucket_diff_top_k":
-                    print("  => BUCKET PROBABILITY TRANSFORMATION")
+                transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
+                                                                  means[:num_features], bucket_indices)
 
-                    transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
-                                                                      means[:num_features[0]], bucket_indices)
+            elif function.__name__ == "get_top_p_difference":
+                print("  => TOP-P PROBABILITY TRANSFORMATION")
+                transformed_probs[pred_labels == label] = trans_2(transformed_probs[pred_labels == label],
+                                                                  means[:1], top_p=top_p)
+
+            else:
+                raise Exception(f"{function.__name__} is not a valid transformation function.")
 
         print(f"  => FINISHED TRANSFORMATIONS!")
-
-        #print(f"entropy big probs first distribution after trans: {entropy(transformed_probs[0][0], axis=-1)}")
-        #print(f"entropy big probs second distribution after trans: {entropy(transformed_probs[0][1], axis=-1)}")
 
     else:
         means = []
-        num_features = [config.function_feature_dict[f"{function.__name__}"] for function in functions]
-        for j in range(len(num_features)):  # len(num_features) tells you how many functions there are
-            means.extend([mean_features[f"{functions[j].__name__}_{i}"] for i in range(num_features[j])])
+        for j in range(num_features):
+            means.extend([mean_features[f"{function.__name__}_{j}"]])
 
-        #'bucket_diff_top_k_0_0': 0.013314630389263624
-        for function in functions:
+        if function.__name__ == "get_entropy_feature":
+            print("  => ENTROPY TRANSFORMATION")
+            transformed_probs = np.apply_along_axis(trans_1, -1, transformed_probs, means[:1], upper_bound)
 
-            if function.__name__ == "get_entropy_feature":
-                print("  => ENTROPY TRANSFORMATION")
-                transformed_probs = np.apply_along_axis(trans_1, -1, transformed_probs, means[num_features[0]:],
-                                                        upper_bound)
+        elif function.__name__ == "bucket_diff_top_k":
+            print("  => BUCKET PROBABILITY TRANSFORMATION")
+            transformed_probs = trans_0(transformed_probs, means[:num_features], bucket_indices)
 
-            elif function.__name__ == "bucket_diff_top_k":
-                print("  => BUCKET PROBABILITY TRANSFORMATION")
-                for i in range(config.function_feature_dict["bucket_diff_top_k"]):
-                    transformed_probs = trans_0(transformed_probs, means[:num_features[0]], bucket_indices)
+        elif function.__name__ == "get_top_p_difference":
+            print("  => TOP-P PROBABILITY TRANSFORMATION")
+            transformed_probs = trans_2(transformed_probs, means[:1], top_p=top_p)
+
+        else:
+            raise Exception(f"{function.__name__} is not a valid transformation function.")
 
         print(f"  => FINISHED TRANSFORMATIONS!")
-
 
     return transformed_probs, filled_up_probs
 

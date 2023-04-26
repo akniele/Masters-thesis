@@ -1,7 +1,7 @@
 import sys
 sys.path.insert(1, '../../Non-Residual-GANN')
 sys.path.insert(2, '../GetClusters')
-from datasets import load_dataset, Dataset
+from datasets import Dataset
 from SamplingComparissons import CompareModels
 from Utils import loadGenerator
 import pandas as pd
@@ -10,11 +10,7 @@ from GANN.SamplingStrategies import SamplingTechniques
 import torch
 import tqdm
 from torch.utils.data import Dataset as DatasetPytorch
-from GetClusters.differenceMetrics import bucket_diff_top_k
 import numpy as np
-from sys import getsizeof
-import psutil
-import config
 
 BIG_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH8-BIG-BIG-A8-R2-1670318134.3765588/"
 SMALL_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH2-Mini-BIG-A8-R2-1670318134.2979872"
@@ -28,11 +24,8 @@ NUM_ALTERATIONS = 8
 NUM_SAMPLES = 100000  # should be divisible by 1000
 TOPK = 256
 
-SAVE = False
-TRUNCATE = False
 
-
-def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUENCE_LENGTH,
+def generateData(function, bucket_indices, tokenized_data_path=TOKENIZED_DATA_PATH, sequence_length=SEQUENCE_LENGTH,
                  num_samples=NUM_SAMPLES, truncate=False, topk=256, save=False):
 
     print("  => LOADING BIG MODEL")
@@ -53,8 +46,6 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
     data = Dataset.from_pandas(pd.DataFrame({"data": new_data}))
     data.set_format("torch")
     loader = iter(torch.utils.data.DataLoader(data["data"], batch_size=1))  # added iter so it doesn't load the first data over and over
-
-    #num_features = sum([config.function_feature_dict[f"{function.__name__}"] for function in functions])
 
     for i in tqdm.tqdm(range(10)):
         print("  => INITIALIZING ARRAYS")
@@ -118,31 +109,12 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
                 big_ordered = tmp_big[depth, rows, sorted_indices]
                 small_ordered = tmp_small[depth, rows, sorted_indices]
 
-                #small_ordered, small_indx = torch.sort(tmp_small, descending=True)
-                #big_ordered, big_indx = torch.sort(tmp_big, descending=True)
-
                 small_ordered = small_ordered[:, :, :topk]
                 big_ordered, big_indx = big_ordered[:, :, :topk], sorted_indices[:, :, :topk]
 
                 small_probabilities[index-200:index, :, :] = small_ordered
                 big_probabilities[index - 200:index, :, :] = big_ordered
-
-                #small_indices[index-200:index, :, :] = small_indx
                 big_indices[index - 200:index, :, :] = big_indx
-
-                # print(f"  => CREATING FEATURE VECTOR")
-                # num_features_function = 0
-                # for j in range(len(functions)):
-                #     diffs = functions[j](tmp_small, tmp_big, bucket_indices)
-                #     if len(diffs.shape) == 2:  # add a dimension for the entropies
-                #         diffs = np.expand_dims(diffs, -1)
-                #
-                #     start = num_features_function
-                #     num_features_function += config.function_feature_dict[f"{functions[j].__name__}"]
-                #     print(f"shape bucket_diffs: {diffs.shape}")
-                #     features[index-200:index, :, start:num_features_function] = torch.from_numpy(diffs)
-                #     print(f"shape features: {features.shape}")
-                # print(f"  => DONE CREATING FEATURE VECTOR")
 
         if save:
             print("  => SAVING...")
@@ -161,15 +133,3 @@ def generateData(functions, bucket_indices, tokenized_data_path=TOKENIZED_DATA_P
             # if i < 10:
             #     with open(f"../pipeline/new_data/features_{num_samples//10}_{i}.pkl", "wb") as m:
             #         pickle.dump(features, m)
-
-    #return small_probabilities, big_probabilities, small_indices, big_indices, features
-
-
-# if __name__ == "__main__":
-    # print("  => GENERATING ALL DATA")
-    # small_probs, big_probs, small_indices, big_indices = generateData(
-    #     TOKENIZED_DATA_PATH, SEQUENCE_LENGTH, NUM_SAMPLES, truncate=TRUNCATE, save=SAVE)
-    # print(len(small_probs))
-    # print(len(small_indices))
-    # print(small_probs[0][0])
-    # print(len(small_probs[0][0]))

@@ -27,7 +27,6 @@ def save_confusion_matrix_to_file(true, pred, num_classes):
     fx.xaxis.set_ticklabels([i for i in range(num_classes)])
     fx.yaxis.set_ticklabels([i for i in range(num_classes)])
     plt.tight_layout()
-    #plt.show()
     plt.savefig("matrix.png")
 
     # get recall, precision, etc.

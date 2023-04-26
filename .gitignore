@@ -4,6 +4,7 @@ NotUsed/
 acc_loss_plot.png
 NotUsed/example_plot.png
 distance_unchanged.py
+config.py
 check_feature_vector_creation.py
 loss_plot.png
 matrix.png
