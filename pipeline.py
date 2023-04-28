@@ -10,10 +10,129 @@ from ClassifierFiles.train_and_evaluate_classifier import make_predictions
 sys.path.insert(1, '../Non-Residual-GANN')
 from GenerateData.generate_data import generateData
 from Transformation.transformation import transformations, get_distances
+import time
+from Transformation.transformation import get_mean_distances
+import os
 
 
-def train(function, bucket_indices, num_clusters, batch_size, epochs, lr, num_test_samples, num_features,
-             generate_data=False, generate_sorted_by_big=False, train_classifier=False):
+def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big, train_classifier,
+             bucket_indices, top_p, n_test_samples):
+
+    # ----- make directories for log files, plots and models if they don't already exist -------- #
+
+    logfile_path = '/home/ubuntu/pipeline/logfiles'  # create new directory for log files if it doesn't already exist
+    directory_exists = os.path.exists(logfile_path)
+    if not directory_exists:
+        os.makedirs(logfile_path)
+
+    plot_path = '/home/ubuntu/pipeline/plots'  # create new directory for plots if it doesn't already exist
+    directory_exists = os.path.exists(plot_path)
+    if not directory_exists:
+        os.makedirs(plot_path)
+
+    model_path = '/home/ubuntu/pipeline/models'  # create new directory for models if it doesn't already exist
+    directory_exists = os.path.exists(model_path)
+    if not directory_exists:
+        os.makedirs(model_path)
+
+    # ----- done making directories ------------------------------------------------------------- #
+
+    if function.__name__ == "get_entropy_feature":
+        num_features = [1]
+        filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
+        with open(f"logfiles/filename", "a") as f:
+            f.write(f"Log file\n "
+                    f"Transformation function: {function.__name__}\n"
+                    f"Number of clusters: {n_clusters}\n"
+                    f"Batch size: {batch_size}\n"
+                    f"Number of epochs: {epochs}\n"
+                    f"Learning rate: {lr}\n"
+                    f"Generate training data: {generate_data}\n"
+                    f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
+                    f"Train classifier: {train_classifier}")
+            f.close()
+
+    elif function.__name__ == "bucket_diff_top_k":
+        num_features = [len(bucket_indices) + 1]
+        filename = f"{function.__name__}_{bucket_indices}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
+        with open(f"logfiles/filename", "a") as f:
+            f.write(f"Log file\n "
+                    f"Transformation function: {function.__name__}\n"
+                    f"Bucket indices: {bucket_indices}\n"
+                    f"Number of clusters: {n_clusters}\n"
+                    f"Batch size: {batch_size}\n"
+                    f"Number of epochs: {epochs}\n"
+                    f"Learning rate: {lr}\n"
+                    f"Generate training data: {generate_data}\n"
+                    f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
+                    f"Train classifier: {train_classifier}")
+            f.close()
+
+    elif function.__name__ == "get_top_p_difference":
+        num_features = [1]
+        filename = f"{function.__name__}_{top_p}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
+        with open(f"logfiles/filename", "a") as f:
+            f.write(f"Log file\n "
+                    f"Transformation function: {function.__name__}\n"
+                    f"Top-p: {top_p}"
+                    f"Number of clusters: {n_clusters}\n"
+                    f"Batch size: {batch_size}\n"
+                    f"Number of epochs: {epochs}\n"
+                    f"Learning rate: {lr}\n"
+                    f"Generate training data: {generate_data}\n"
+                    f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
+                    f"Train classifier: {train_classifier}")
+            f.close()
+
+    else:
+        raise Exception(f"{function.__name__} is not a valid transformation function.")
+
+    start = time.perf_counter()
+
+    new_pred_labels, dict_means = train(function=function,
+                                        bucket_indices=bucket_indices,
+                                        top_p=top_p,
+                                        num_clusters=n_clusters,
+                                        batch_size=batch_size,
+                                        epochs=epochs,
+                                        lr=lr,
+                                        num_test_samples=n_test_samples,
+                                        num_features=num_features,
+                                        filename=filename,
+                                        generate_data=generate_data,
+                                        generate_sorted_by_big_data=generate_sorted_by_big,
+                                        train_classifier=train_classifier)
+
+    bigprobs, smallprobs, indices1, indices0 = load_test_data(num_test_samples=n_test_samples,
+                                                              bucket_indices=bucket_indices)
+
+    trans_distances, original_distances = transform_and_evaluate(bigprobs,
+                                                                 smallprobs,
+                                                                 indices1,
+                                                                 indices0,
+                                                                 dict_means,
+                                                                 bucket_indices=bucket_indices,
+                                                                 top_p=top_p,
+                                                                 function=function,
+                                                                 new_pred_labels=new_pred_labels,
+                                                                 num_features=num_features)
+
+    print(f"shape trans_distances: {trans_distances.shape}")
+    print(f"original_distances: {original_distances.shape}")
+
+    score_mean, score_std = get_mean_distances(trans_distances, original_distances, filename)
+    end = time.perf_counter()
+
+    with open(filename, "a") as f:
+        f.write(f"Difference in mean Weighted Manhattan Distance: {score_mean}\n"
+                f"Difference in standard deviation of Weighted Manhattan Distances: {score_std}\n"
+                f"elapsed time:{(end - start) / 60} minutes")
+
+    return score_mean
+
+
+def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr, num_test_samples, num_features,
+          filename, generate_data=False, generate_sorted_by_big_data=False, train_classifier=False):
 
     NUM_TRAIN_SHEETS = 10_000  # for creating feature vectors, and training classifier
     N_CLUSTERS = num_clusters  # number of clusters used for clustering
@@ -27,9 +146,15 @@ def train(function, bucket_indices, num_clusters, batch_size, epochs, lr, num_te
 
     if generate_data:
         print("  => GENERATING DATA AND FEATURE VECTORS")
-        generateData(function, bucket_indices, num_features=NUM_FEATURES,
+        generateData(function, bucket_indices, top_p, num_features=NUM_FEATURES,
                      num_samples=100_000, truncate=True, topk=256, save=True,
                      features_only=True, sorted_by_big=False)
+
+    if generate_sorted_by_big_data:
+        print("  => GENERATING DATA SORTED BY BIG MODEL")
+        generateData(function, bucket_indices, top_p, num_features=NUM_FEATURES,
+                     num_samples=100_000, truncate=True, topk=256, save=True,
+                     features_only=True, sorted_by_big=True)
 
     print("  => LOADING SCALED FEATURES FOR CLUSTERING")
     scaled_features = load_feature_vector(function=function, num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS,
@@ -40,35 +165,47 @@ def train(function, bucket_indices, num_clusters, batch_size, epochs, lr, num_te
     print(scaled_features[:3])
     print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
 
-    print("  => CLUSTERING")
-    labels = k_means_clustering(scaled_features, N_CLUSTERS)
+    if N_CLUSTERS is not None:
+        print("  => CLUSTERING")
+        labels = k_means_clustering(scaled_features, N_CLUSTERS)
 
-    labels_distribution = label_distribution(N_CLUSTERS, labels)
-    print(f"label distribution: {labels_distribution}")
+        labels_distribution = label_distribution(N_CLUSTERS, labels)
+        with open(f"logfiles/{filename}", "a") as logfile:
+            logfile.write(f"Label distribution of clustering: {labels_distribution}")
+    else:
+        labels = None
 
     print("  => GET MEAN FEATURES FROM TRAINING DATA")
     dict_means = get_means_from_training_data(function=function, num_features=NUM_FEATURES,
                                               num_sheets=NUM_TRAIN_SHEETS, labels=labels)
 
-    for key, value in dict_means.items():
-        print(f"key: {key}\t value:{value}")
+    with open(f"logfiles/{filename}", "a") as logfile:
+        logfile.write("Mean feature differences from training data:")
+        for key, value in dict_means.items():
+            logfile.write(f"Feature: {key}\t Mean difference: {value}")
 
-    if train_classifier:
-        pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
-            NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS, function)
+    if labels is not None:
+        if train_classifier:
+            pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
+                NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS, function, filename)
 
-    new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples)
+        new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples, function=function,
+                                           epochs=EPOCHS, lr=LR)
 
-    print(f"pred labels: {new_pred_labels[:50]}")
+        print(f"pred labels: {new_pred_labels[:50]}")
 
-    new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
+        new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
 
-    print(f"new shape of pred labels: {new_pred_labels.shape}")
+        print(f"new shape of pred labels: {new_pred_labels.shape}")
 
-    return new_pred_labels, dict_means
+        return new_pred_labels, dict_means
+
+    else:
+        new_pred_labels = None
+        return new_pred_labels, dict_means
 
 
-def load_test_data(new_pred_labels, num_test_samples, bucket_indices):
+def load_test_data(num_test_samples, bucket_indices):
     print("  => LOAD DATA FOR TRANSFORMATION")
 
     with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
@@ -103,11 +240,11 @@ def load_test_data(new_pred_labels, num_test_samples, bucket_indices):
     bucket_indices.insert(0, 0)
     bucket_indices.append(16_384)
 
-    return bigprobs, smallprobs, indices1, indices0, new_pred_labels, num_test_samples
+    return bigprobs, smallprobs, indices1, indices0
 
 
 def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
-                           bucket_indices, function, new_pred_labels, num_features):
+                           bucket_indices, top_p, function, new_pred_labels, num_features):
 
     transformed_probs, original_probs = transformations(bigprobs,
                                                         indices1,
@@ -116,7 +253,7 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                                                         bucket_indices,
                                                         function,
                                                         upper_bound=130,
-                                                        top_p=0.9,
+                                                        top_p=top_p,
                                                         pred_labels=new_pred_labels)
 
     print(f"shape transformed_probs: {transformed_probs.shape}")
@@ -130,8 +267,3 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)
 
     return trans_distances_tmp, original_distances_tmp
-
-
-def generate_data(function, bucket_indices, num_samples=100_000, truncate=True, topk=256, save=True):
-    print("  => GENERATING DATA AND FEATURE VECTORS")
-    generateData(function, bucket_indices, num_samples=num_samples, truncate=truncate, topk=topk, save=save)

@@ -251,108 +251,21 @@ def get_distances(transformed_probs, bigprobs, smallprobs, small_indices):
     return dist_trans_tmp, dist_big_tmp
 
 
-def get_mean_distances(dist_trans, dist_big):
+def get_mean_distances(dist_trans, dist_big, filename):
     mean_dist_trans = np.mean(dist_trans).item()
     mean_dist_big = np.mean(dist_big).item()
 
-    print(f" mean_dist_trans: {mean_dist_trans}")
-    print(f" mean_dist_big: {mean_dist_big}")
+    std_dist_trans = np.std(dist_trans).item()
+    std_dist_big = np.std(dist_big).item()
 
-    return mean_dist_trans - mean_dist_big
+    with open(f"../logfiles/{filename}") as logfile:
+        logfile.write(f"Mean Weighted Manhattan Distance between transformed distributions and target: "
+                      f"{mean_dist_trans}\n"
+                      f"Mean Weighted Manhattan Distance between untransformed distributions and target: "
+                      f"{mean_dist_big}\n"
+                      f"Standard Deviation of the Weighted Manhattan Distances of the tranformed distributions: "
+                      f"{std_dist_trans}\n"
+                      f"Standard Deviation of the Weighted Manhattan Distances of the untransformed distributions: "
+                      f"{std_dist_big}")
 
-
-if __name__ == "__main__":
-    # f = lambda x: torch.tensor(x, dtype=torch.float32)
-    #
-    # unchanged = f([0.3, 0.2, 0.5])
-    # print("Unchanged", unchanged)
-    #
-    # transformation = f([-.2, 0.3, -0.3])
-    # print("Transformation", transformation)
-    #
-    # actual_trans = trans_0(unchanged, transformation, indices=[1, 4])
-
-    # arr = np.array([[[0.3, 0.3, 0.4],
-    #                  [0.3, 0.9, 0.4],
-    #                  [0.1, 0.7, 0.4]],
-    #
-    #                 [[0.3, 0.2, 0.9],
-    #                  [0.1, 0.1, 0.8],
-    #                  [0.3, 0.2, 0.5]]])
-    #
-    # mean_bucket_trans = np.array([-0.2, 0.4])
-    # mean_bucket_trans = np.expand_dims(mean_bucket_trans, 0)
-    # mean_bucket_trans = np.expand_dims(mean_bucket_trans, 0)
-    #
-    # indices = [0, 1, 3]
-    #
-    # target_probs = trans_0(arr, mean_bucket_trans, indices)
-    #
-    # print(target_probs)
-
-
-    # NUM_TRAIN_SHEETS = 20
-    # NUM_TEST_SHEETS = 12
-    #
-    """Load data"""
-    # data
-    probs1 = pickle.load(open("../train_data/train_big_100000_0.pkl", "rb"))
-    indices = pickle.load(open("../train_data/indices_big_100000_0.pkl", "rb"))
-    probs1 = probs1.detach().numpy()
-    indices = indices.detach().numpy()
-
-    print(f"shape probs: {probs1.shape}")
-
-    probs1 = fill_multiple_distributions(probs1[:500], indices[:500], topk=256)
-
-    mean_bucket_trans = np.array([[[-0.2, 0.5, 0.4]]])
-
-    bucket_indices = [0, 20, 50, probs1.shape[-1]]
-
-    trans_probs = trans_0(probs1, mean_bucket_trans, bucket_indices)
-
-    print(trans_probs.shape)
-    print(trans_probs[:1, :, :])
-
-    # print(f"entropy small model: {entropy(probs0[0][0])}")
-    # print(f"entropy big model: {entropy(probs1[0][0])}")
-    # trans_p = trans1(probs1[0][0], probs0[0][0], 0.0210886001586914)
-    # print(entropy(trans_p))
-
-
-
-    #
-    # """transform big probs to be more similar to small probs"""
-    #
-    # transformed_probs = probability_transformation(probs1[:20, :, :], probs0[:20, :, :])
-    # print(transformed_probs.shape)
-    #
-    # total_weighted_changed, total_weighted_unchanged = compare_distance(transformed_probs, probs0[:20, :, :], probs1[:20, :, :])
-    #
-    # print(f"standard deviation of weighted Manhattan distances after transformation: {np.std(total_weighted_changed)}")
-    # print(f"standard deviation of weighted Manhattan distances without transformation: {np.std(total_weighted_unchanged)}")
-    #
-    # print(f"mean of weighted Manhattan distances after transformation: {np.mean(total_weighted_changed)}")
-    # print(
-    #     f"mean of weighted Manhattan distances without transformation: {np.mean(total_weighted_unchanged)}")
-    #
-    #
-    # # print(f"sum of Manhattan Distance after transformation: {total_changed}")
-    # # print(f"sum of Manhattan Distance without transformation: {total_unchanged}")
-    #
-    # print(f"sum of weighted Manhattan Distance after transformation: {sum(total_weighted_changed)}")
-    # print(f"sum of weighted Manhattan Distance without: {sum(total_weighted_unchanged)}")
-    #
-    # #transformed_probs = probability_transformation(probs1, probs0)
-    #
-    # improvement_weighted = compare_distributions(transformed_probs, probs0[:20, :, :], probs1[:20, :, :])
-    #
-    # print(f" Using the Manhattan distance, % "  #{improvement_manhattan * 100}
-    #       f"of the transformed distributions are closer to the target distribution.\nFor the weighted Manhattan "
-    #       f"distance, the score is {improvement_weighted * 100}%.")
-    #
-    # improvement_manhattan_128, improvement_weighted_128 = sanity_check_distance_metrics(transformed_probs,
-    #                                                                                     probs0[:20, :, :], probs1[:20, :, :])
-    # print(f" Using the cutoff Manhattan distance, {improvement_manhattan_128 * 100}% "
-    #       f"of the transformed distributions are closer to the target distribution.\nFor the cutoff weighted Manhattan "
-    #       f"distance, the score is {improvement_weighted_128 * 100}%.")
+    return mean_dist_trans - mean_dist_big, std_dist_trans - std_dist_big

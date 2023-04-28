@@ -4,7 +4,7 @@ import ClassifierFiles.confusion_matrix as confusion_matrix
 import torch
 
 
-def evaluate(model, test_data, num_classes):
+def evaluate(model, test_data, filename, num_classes):
     test = datasetTrain.Dataset(test_data)
 
     test_dataloader = torch.utils.data.DataLoader(test, batch_size=1)
@@ -53,7 +53,7 @@ def evaluate(model, test_data, num_classes):
 
     assert len(pred_labels) == len(true_labels)
 
-    confusion_matrix.save_confusion_matrix_to_file(true_labels, pred_labels, num_classes)
+    confusion_matrix.save_confusion_matrix_to_file(true_labels, pred_labels, num_classes, filename)
 
     return pred_labels, true_labels
     

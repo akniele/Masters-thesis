@@ -7,7 +7,7 @@ import ClassifierFiles.datasetTrain as datasetTrain
 import ClassifierFiles.plot_acc_and_loss as plot_acc_and_loss
 
 
-def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_classes):
+def train(model, filename, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_classes):
     train, val = datasetTrain.Dataset(train_data), datasetTrain.Dataset(val_data)
 
     train_dataloader = torch.utils.data.DataLoader(train, BATCH_SIZE, shuffle=True)
@@ -79,10 +79,11 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
             model.val_acc.append(total_acc_val / (len(val_data)*64))
             model.val_loss.append(total_loss_val / (len(val_data)*64))
 
-        print(
-            f'Epochs: {epoch_num} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | Train Accuracy: '
-            f'{total_acc_train / (len(train_data)*64): .4f} | Val Loss: {total_loss_val / (len(val_data)*64): .4f} '
-            f'| Val Accuracy: {total_acc_val / (len(val_data)*64): .4f}\n\n')
+        with open(f"../logfiles/{filename}", "a") as logfile:
+            logfile.write(f'Epochs: {epoch_num} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | '
+                          f'Train Accuracy: {total_acc_train / (len(train_data)*64): .4f} | Val Loss: '
+                          f'{total_loss_val / (len(val_data)*64): .4f} | Val Accuracy: '
+                          f'{total_acc_val / (len(val_data)*64): .4f}\n\n')
 
     acc_loss = defaultdict()
     acc_loss["train_accuracy"] = model.train_acc
@@ -90,4 +91,4 @@ def train(model, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_cl
     acc_loss["val_accuracy"] = model.val_acc
     acc_loss["val_loss"] = model.val_loss
 
-    plot_acc_and_loss.acc_loss_plot(acc_loss)  # create a plot with train and val accuracy and loss
+    plot_acc_and_loss.acc_loss_plot(acc_loss, filename)  # create a plot with train and val accuracy and loss

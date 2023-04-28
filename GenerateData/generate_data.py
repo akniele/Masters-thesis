@@ -26,7 +26,7 @@ NUM_SAMPLES = 100000  # should be divisible by 1000
 TOPK = 256
 
 
-def generateData(function, bucket_indices, num_features, tokenized_data_path=TOKENIZED_DATA_PATH,
+def generateData(function, bucket_indices, top_p, num_features, tokenized_data_path=TOKENIZED_DATA_PATH,
                  sequence_length=SEQUENCE_LENGTH, num_samples=NUM_SAMPLES, truncate=False, topk=256,
                  save=False, features_only=False, sorted_by_big=False):
 
@@ -137,10 +137,11 @@ def generateData(function, bucket_indices, num_features, tokenized_data_path=TOK
                         big_probabilities[index - 200:index, :, :] = big_ordered
                         big_indices[index - 200:index, :, :] = big_indx
 
-                print(f"  => CREATING FEATURE VECTOR")
-                diffs = function(tmp_small, tmp_big, bucket_indices)
-                features[index - 200:index, :, :] = torch.from_numpy(diffs)
-                print(f"  => DONE CREATING FEATURE VECTOR")
+                if not sorted_by_big:
+                    print(f"  => CREATING FEATURE VECTOR")
+                    diffs = function(tmp_small, tmp_big, indices=bucket_indices, top_p=top_p)
+                    features[index - 200:index, :, :] = torch.from_numpy(diffs)
+                    print(f"  => DONE CREATING FEATURE VECTOR")
 
         if save:
             print("  => SAVING...")

@@ -4,7 +4,7 @@ import seaborn as sns
 from sklearn.metrics import classification_report
 
 
-def save_confusion_matrix_to_file(true, pred, num_classes):
+def save_confusion_matrix_to_file(true, pred, num_classes, filename):
     plt.figure(figsize=(7, 5))
 
     SMALL_SIZE = 12
@@ -27,7 +27,7 @@ def save_confusion_matrix_to_file(true, pred, num_classes):
     fx.xaxis.set_ticklabels([i for i in range(num_classes)])
     fx.yaxis.set_ticklabels([i for i in range(num_classes)])
     plt.tight_layout()
-    plt.savefig("matrix.png")
+    plt.savefig(f"plots/matrix_{filename}.png")
 
     # get recall, precision, etc.
     print(classification_report(true, pred, digits=4))

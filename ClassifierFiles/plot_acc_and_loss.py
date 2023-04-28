@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 
 
-def acc_loss_plot(records):
+def acc_loss_plot(records, filename):
     fig, ax1 = plt.subplots()
 
     color = 'tab:blue'
@@ -23,7 +23,7 @@ def acc_loss_plot(records):
 
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     fig.legend(loc='center right', bbox_to_anchor=(0.85, 0.55))
-    plt.savefig('acc_loss_plot.png')
+    plt.savefig(f'plots/acc_loss_{filename}.png')
 
 
 def loss_plot(records, file_name):  # for baseline model (we are not calculating the accuracy for this one)
@@ -39,4 +39,4 @@ def loss_plot(records, file_name):  # for baseline model (we are not calculating
 
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     fig.legend(loc='center right', bbox_to_anchor=(0.85, 0.55))
-    plt.savefig(file_name)
+    plt.savefig(f'plots/{file_name}')

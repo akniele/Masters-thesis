@@ -13,7 +13,7 @@ import torch
 """train classifier on big probs and labels from clustering step"""
 
 
-def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, num_sheets, function):
+def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, num_sheets, function, filename):
     NUM_CLASSES = num_classes
     BATCH_SIZE = batch_size
     EPOCHS = epochs
@@ -48,18 +48,18 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
     model = BertClassifier(NUM_CLASSES)
 
     print("  => STARTING TRAINING")
-    train(model, df_train, df_val, LR, EPOCHS, BATCH_SIZE, num_classes=NUM_CLASSES)
+    train(model, filename, df_train, df_val, LR, EPOCHS, BATCH_SIZE, num_classes=NUM_CLASSES)
 
-    torch.save(model.state_dict(), f'{function.__name__ }_{NUM_CLASSES}_{LR}_{EPOCHS}.pt')
+    torch.save(model.state_dict(), f'models/{function.__name__ }_{NUM_CLASSES}_{LR}_{EPOCHS}.pt')
 
     print("  => EVALUATING MODEL")
     """test classifier"""
-    pred_labels, true_labels = evaluate(model, df_test, num_classes=NUM_CLASSES)
+    pred_labels, true_labels = evaluate(model, df_test, filename, num_classes=NUM_CLASSES)
 
     return pred_labels, true_labels
 
 
-def make_predictions(num_classes, num_sheets):
+def make_predictions(num_classes, num_sheets, function, epochs, lr):
     NUM_CLASSES = num_classes
 
     print("  => PREPARE DATA FOR PREDICTIONS")
@@ -74,7 +74,7 @@ def make_predictions(num_classes, num_sheets):
     print(f"length of pandas frame: {df.shape[0]}")
 
     model = BertClassifier(NUM_CLASSES)
-    model.load_state_dict(torch.load("first_try.pt"))
+    model.load_state_dict(torch.load(f'models/{function.__name__ }_{NUM_CLASSES}_{lr}_{epochs}.pt'))
     model.eval()
 
     print("  => PREDICTING LABELS")
