@@ -27,7 +27,7 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
     labels = iter(labels)
 
     for i in tqdm(range(9)):
-        with open(f"train_data/train_big_100000_{i}.pkl", "rb") as f:
+        with open(f"train_data/big_10000_{i}.pkl", "rb") as f:
             probs1 = pickle.load(f)
         probs1 = probs1.numpy()
         df_tmp = prepare_training_data(probs1, num_sheets, labels)
@@ -66,7 +66,7 @@ def make_predictions(num_classes, num_sheets, function, epochs, lr):
 
     df = False
 
-    with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
+    with open(f"train_data/big_10000_9.pkl", "rb") as f:
         probs1 = pickle.load(f)
     probs1 = probs1.numpy()
     df = prepare_training_data(probs1, num_sheets)

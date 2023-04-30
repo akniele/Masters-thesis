@@ -17,14 +17,17 @@ def fill_multiple_distributions(distributions, indices, topk=256):
 
     indices = indices.astype(int)
 
-    depth = np.arange(len(distributions))
-    depth = np.expand_dims(depth, 1)
-    depth = np.expand_dims(depth, 2)
-    depth = np.broadcast_to(depth, distributions.shape)
+    depth = np.indices(distributions.shape)[0]
+    rows = np.indices(distributions.shape)[1]
 
-    rows = np.arange(distributions.shape[1])
-    rows = np.expand_dims(rows, 1)
-    rows = np.broadcast_to(rows, distributions.shape)
+    # depth = np.arange(len(distributions))
+    # depth = np.expand_dims(depth, 1)
+    # depth = np.expand_dims(depth, 2)
+    # depth = np.broadcast_to(depth, distributions.shape)
+    #
+    # rows = np.arange(distributions.shape[1])
+    # rows = np.expand_dims(rows, 1)
+    # rows = np.broadcast_to(rows, distributions.shape)
 
     new_probs[depth, rows, indices] = distributions
 

@@ -15,7 +15,7 @@ import numpy as np
 
 BIG_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH8-BIG-BIG-A8-R2-1670318134.3765588/"
 SMALL_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH2-Mini-BIG-A8-R2-1670318134.2979872"
-TOKENIZED_DATA_PATH = "../pipeline/train_data/WikitextDataset-16384-64-ls-100-Train-10pct.pkl"
+TOKENIZED_DATA_PATH = "../pipeline/Data/WikitextDataset-16384-64-ls-100-Train-10pct.pkl"
 TOKENIZER_PATH = "/home/ubuntu/Non-Residual-GANN/Tokenizers/WikitextTokenizer-16384-64-ls-100"
 DEVICE = "cuda:0"
 CHECKPOINT = "Epoch-8"
@@ -28,7 +28,7 @@ TOPK = 256
 
 def generateData(function, bucket_indices, top_p, num_features, tokenized_data_path=TOKENIZED_DATA_PATH,
                  sequence_length=SEQUENCE_LENGTH, num_samples=NUM_SAMPLES, truncate=False, topk=256,
-                 save=False, features_only=False, sorted_by_big=False):
+                 save=False, sorted_by_big=False):
 
     print("  => LOADING BIG MODEL")
     bigModel = loadGenerator(BIG_MODEL_PATH, CHECKPOINT).to(DEVICE)
@@ -98,66 +98,70 @@ def generateData(function, bucket_indices, top_p, num_features, tokenized_data_p
             index += 1
 
             if index % 200 == 0 and truncate:
-                if not features_only:
-                    if not sorted_by_big:
-                        print(f"  => SORTING AND TRUNCATING PROBS")
-                        small_ordered, small_indx = torch.sort(tmp_small, descending=True, stable=True)
-                        big_ordered, big_indx = torch.sort(tmp_big, descending=True, stable=True)
-
-                        small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
-                        big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
-
-                        small_probabilities[index-200:index, :, :] = small_ordered
-                        big_probabilities[index - 200:index, :, :] = big_ordered
-
-                        small_indices[index-200:index, :, :] = small_indx
-                        big_indices[index - 200:index, :, :] = big_indx
-
-                    else:
-                        tmp_big = tmp_big.numpy()
-                        tmp_small = tmp_small.numpy()
-                        sorted_indices = np.argsort(tmp_big, axis=-1, kind='stable')[:, :, ::-1]
-
-                        depth = np.arange(len(tmp_big))
-                        depth = np.expand_dims(depth, 1)
-                        depth = np.expand_dims(depth, 2)
-                        depth = np.broadcast_to(depth, tmp_big.shape)
-
-                        rows = np.arange(tmp_big.shape[1])
-                        rows = np.expand_dims(rows, 1)
-                        rows = np.broadcast_to(rows, tmp_big.shape)
-
-                        big_ordered = tmp_big[depth, rows, sorted_indices]
-                        small_ordered = tmp_small[depth, rows, sorted_indices]
-
-                        small_ordered = small_ordered[:, :, :topk]
-                        big_ordered, big_indx = big_ordered[:, :, :topk], sorted_indices[:, :, :topk]
-
-                        small_probabilities[index - 200:index, :, :] = small_ordered
-                        big_probabilities[index - 200:index, :, :] = big_ordered
-                        big_indices[index - 200:index, :, :] = big_indx
-
                 if not sorted_by_big:
+                    print(f"  => SORTING AND TRUNCATING PROBS")
+                    small_ordered, small_indx = torch.sort(tmp_small, descending=True, stable=True)
+                    big_ordered, big_indx = torch.sort(tmp_big, descending=True, stable=True)
+
+                    small_ordered, small_indx = small_ordered[:, :, :topk], small_indx[:, :, :topk]
+                    big_ordered, big_indx = big_ordered[:, :, :topk], big_indx[:, :, :topk]
+
+                    small_probabilities[index-200:index, :, :] = small_ordered
+                    big_probabilities[index - 200:index, :, :] = big_ordered
+
+                    small_indices[index-200:index, :, :] = small_indx
+                    big_indices[index - 200:index, :, :] = big_indx
+
+                    # ----- FEATURES ----- #
+                    tmp_small = tmp_small.numpy()
+                    tmp_big = tmp_big.numpy()
                     print(f"  => CREATING FEATURE VECTOR")
                     diffs = function(tmp_small, tmp_big, indices=bucket_indices, top_p=top_p)
                     features[index - 200:index, :, :] = torch.from_numpy(diffs)
                     print(f"  => DONE CREATING FEATURE VECTOR")
+                    tmp_small = torch.from_numpy(tmp_small)
+                    tmp_big = torch.from_numpy(tmp_big)
+
+                else:
+                    tmp_big = tmp_big.numpy()
+                    tmp_small = tmp_small.numpy()
+                    sorted_indices = np.argsort(tmp_big, axis=-1, kind='stable')[:, :, ::-1]
+
+                    depth = np.indices(tmp_big.shape)[0]
+                    rows = np.indices(tmp_big.shape)[1]
+
+                    big_ordered = tmp_big[depth, rows, sorted_indices]
+                    small_ordered = tmp_small[depth, rows, sorted_indices]
+
+                    small_ordered = small_ordered[:, :, :topk]
+                    big_ordered, big_indx = big_ordered[:, :, :topk], sorted_indices[:, :, :topk]
+
+                    small_probabilities[index - 200:index, :, :] = torch.from_numpy(small_ordered)
+                    big_probabilities[index - 200:index, :, :] = torch.from_numpy(big_ordered)
+                    big_indices[index - 200:index, :, :] = torch.from_numpy(big_indx.copy())
+                    tmp_big = torch.from_numpy(tmp_big)
+                    tmp_small = torch.from_numpy(tmp_small)
 
         if save:
             print("  => SAVING...")
 
-            if not features_only:
-                with open(f"../pipeline/train_data/big_{num_samples//10}_{i}.pkl", "wb") as f:
-                    pickle.dump(big_probabilities, f)
+            if sorted_by_big:
+                sorting = "sep"
+            else:
+                sorting = ""
 
-                with open(f"../pipeline/train_data/small_{num_samples//10}_{i}.pkl", "wb") as g:
-                    pickle.dump(small_probabilities, g)
+            with open(f"../pipeline/train_data/big_{num_samples//10}_{i}{sorting}.pkl", "wb") as f:
+                pickle.dump(big_probabilities, f)
 
-                with open(f"../pipeline/train_data/indices_big_{num_samples//10}_{i}.pkl", "wb") as h:
-                    pickle.dump(big_indices, h)
+            with open(f"../pipeline/train_data/small_{num_samples//10}_{i}{sorting}.pkl", "wb") as g:
+                pickle.dump(small_probabilities, g)
 
-                with open(f"../pipeline/train_data/indices_small_{num_samples//10}_{i}.pkl", "wb") as k:
+            with open(f"../pipeline/train_data/indices_big_{num_samples//10}_{i}{sorting}.pkl", "wb") as h:
+                pickle.dump(big_indices, h)
+
+            if not sorted_by_big:
+                with open(f"../pipeline/train_data/indices_small_{num_samples//10}_{i}{sorting}.pkl", "wb") as k:
                     pickle.dump(small_indices, k)
 
-            with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
-                pickle.dump(features, m)
+                with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
+                    pickle.dump(features, m)

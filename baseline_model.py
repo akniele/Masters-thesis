@@ -44,9 +44,9 @@ def main():
     df_small = False
 
     for i in tqdm.tqdm(range(9)):
-        with open(f"final_data/big_10000_{i}.pkl", "rb") as f:  # This data is sorted by the probs of the big model
+        with open(f"train_data/big_10000_{i}sep.pkl", "rb") as f:  # This data is sorted by the probs of the big model
             probs1 = pickle.load(f)
-        with open(f"final_data/small_10000_{i}.pkl", "rb") as g:
+        with open(f"train_data/small_10000_{i}sep.pkl", "rb") as g:
             probs0 = pickle.load(g)
 
         tmp_zeros = np.zeros((NUM_TRAIN_SHEETS, 64, 1))
@@ -88,20 +88,20 @@ def main():
 
     print("  => PREPARING TEST DATA FOR CLASSIFIER")
 
-    with open(f"train_data/train_big_100000_9.pkl", "rb") as f:  # the big and small probs are sorted separately
+    with open(f"train_data/train_big_10000_9.pkl", "rb") as f:  # the big and small probs are sorted separately
         probs1 = pickle.load(f)
         probs1 = probs1[:N_TEST_SAMPLES]
-    with open(f"train_data/train_small_100000_9.pkl", "rb") as g:
+    with open(f"train_data/train_small_10000_9.pkl", "rb") as g:
         probs0 = pickle.load(g)
         probs0 = probs0[:N_TEST_SAMPLES]
-    with open(f"train_data/indices_big_100000_9.pkl", "rb") as h:
+    with open(f"train_data/indices_big_10000_9.pkl", "rb") as h:
         indices = pickle.load(h)
         indices = indices[:N_TEST_SAMPLES]
-    with open(f"train_data/indices_small_100000_9.pkl", "rb") as k:
+    with open(f"train_data/indices_small_10000_9.pkl", "rb") as k:
         indices0 = pickle.load(k)
         indices0 = indices0[:N_TEST_SAMPLES]
 
-    with open(f"final_data/small_10000_9.pkl", "rb") as g:
+    with open(f"train_data/small_10000_9sep.pkl", "rb") as g:  # the small probs are sorted by the big probs
         test_small = pickle.load(g)
         test_small = test_small[:N_TEST_SAMPLES]
 

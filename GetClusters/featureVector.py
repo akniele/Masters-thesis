@@ -15,6 +15,7 @@ def load_feature_vector(function, num_features, num_sheets=10000, scaled=True):
     for i in range(9):
         with open(f"train_data/features_{i}_{function.__name__}.pkl", "rb") as f:
             feature = pickle.load(f)
+            feature = feature.numpy()
 
         correct_shape_feature = feature.reshape((feature.shape[0]*feature.shape[1], num_features))
         features[i*(64*num_sheets):(i+1)*(64*num_sheets)] = correct_shape_feature

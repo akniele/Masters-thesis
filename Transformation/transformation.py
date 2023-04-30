@@ -26,7 +26,7 @@ def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.02):
     return absDiff, timeStepDiffs, sampleDiffs
 
 
-def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchange.com/questions/521582/controlling-the-entropy-of-a-distribution
+def f(beta, p, entropy_small, counter):  # solution found here: https://stats.stackexchange.com/questions/521582/controlling-the-entropy-of-a-distribution
     z = sum(p**beta)
     with warnings.catch_warnings():
         warnings.filterwarnings('error')
@@ -36,6 +36,8 @@ def f(beta, p, entropy_small):  # solution found here: https://stats.stackexchan
             print(f"error found: {e}")
             print(f" current value of beta: {beta}")
             print(f" entropy of current distribution: {entropy(np.squeeze(p, -1))}")
+            np.save(f'/home/ubuntu/pipeline/plots/broken_distr_{counter[0]}', np.squeeze(p, -1))
+            counter[0] += 1
             return 1
 
     return (new_entropy - entropy_small)**2
@@ -58,7 +60,9 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
 
     bounds = [(0, upper_bound)]
 
-    solution = minimize(fun=f, x0=1, bounds=bounds, args=(p, small_entropy))  # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
+    counter = [0]
+
+    solution = minimize(fun=f, x0=1, bounds=bounds, args=(p, small_entropy, counter))  # find minimum of function f, initial guess is set to 1 because prob**1 is just prob
     new_z = sum(p**solution.x)
     transformed_p = (p**solution.x) / new_z
     transformed_p = np.squeeze(transformed_p, 1)  # squeeze away the dimension we needed for the optimizer
@@ -67,18 +71,12 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
 
 def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
-    bigprobs = np.expand_dims(bigprobs, 0)
+    bigprobs = np.expand_dims(bigprobs, 0)  # TODO: Figure out why you are expanding dimensions here??
 
     sorted_indices = np.argsort(bigprobs, axis=-1, kind='stable')[:, :, ::-1]
 
-    depth = np.arange(len(bigprobs))
-    depth = np.expand_dims(depth, 1)
-    depth = np.expand_dims(depth, 2)
-    depth = np.broadcast_to(depth, bigprobs.shape)
-
-    rows = np.arange(bigprobs.shape[1])
-    rows = np.expand_dims(rows, 1)
-    rows = np.broadcast_to(rows, bigprobs.shape)
+    depth = np.indices(bigprobs.shape)[0]
+    rows = np.indices(bigprobs.shape)[1]
 
     sorted_big_probs = bigprobs[depth, rows, sorted_indices]
 
@@ -120,29 +118,45 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     return final_probs
 
 
-def trans_2(probs, mean_k, top_p):  # transform probabilities
-    cumsum = np.cumsum(probs, axis=-1)
+def trans_2(probs, mean_k, top_p):
+    sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
+
+    depth = np.indices(probs.shape)[0]
+    rows = np.indices(probs.shape)[1]
+
+    sorted_probs = probs[depth, rows, sorted_indices]
+
+    del probs
+
+    cumsum = np.cumsum(sorted_probs, axis=-1)
     mask = cumsum >= top_p
-    if np.any(mask):
-        current_k = np.argmax(mask) + 1
-        target_k = current_k - mean_k
+    current_k = np.argmax(mask, axis=-1)
+    current_k = np.expand_dims(current_k, -1)
 
-        indices = np.array([0, target_k, probs.shape[-1]])
+    target_k = current_k - mean_k
 
-        #current_top_p_sum = np.sum(probs[indices[0]: indices[1]], axis=-1)
+    target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
 
-        target_p = np.array([top_p, 1 - top_p])
+    idx_array = np.indices(sorted_probs.shape)[-1]
 
-        for i, index in enumerate(indices[:-1]):
-            probs[indices[i]: indices[i + 1]] = probs[indices[i]: indices[i + 1]] / np.sum(
-                probs[indices[i]: indices[i + 1]],
-                axis=-1) * target_p[i]
+    mask = idx_array <= target_k
 
-        return probs
+    sum_top_p = np.sum(sorted_probs, axis=-1, where=mask, keepdims=True)
+    sum_not_top = np.sum(sorted_probs, axis=-1, where=np.invert(mask), keepdims=True)
 
-    else:
-        print("Raise some sort of Error!")
-        return False
+    target_p = np.array([top_p, 1 - top_p])
+
+    sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask)
+    sorted_probs = np.multiply(sorted_probs, target_p[0], where=mask)
+    sorted_probs = np.divide(sorted_probs, sum_not_top, where=np.invert(mask))
+    sorted_probs = np.multiply(sorted_probs, target_p[1], where=np.invert(mask))
+
+    final_probs = np.zeros(sorted_probs.shape)  # TODO: Check if this, and the unsorting, does what it is supposed to!
+    final_probs[depth, rows, sorted_indices] = sorted_probs  # unsort the probabilities
+
+    #final_probs = np.squeeze(final_probs, 0)
+
+    return final_probs
 
 
 def transformations(bigprobs, indices, mean_features, num_features, bucket_indices, function,
@@ -224,7 +238,7 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
     return transformed_probs, filled_up_probs
 
 
-def get_distances(transformed_probs, bigprobs, smallprobs, small_indices):
+def get_distances(transformed_probs, bigprobs, smallprobs, small_indices, filename):
     """
     1. Fill up distributions from the smaller model
     2. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
@@ -238,6 +252,11 @@ def get_distances(transformed_probs, bigprobs, smallprobs, small_indices):
     """
 
     filled_up_small_probs = fill_multiple_distributions(smallprobs, small_indices)
+
+    small_entropy = np.mean(entropy(filled_up_small_probs, axis=-1))
+
+    with open(f"/home/ubuntu/pipeline/logfiles/{filename}.txt", "a") as logfile:
+        logfile.write(f"mean entropy of original small distributions: {small_entropy}\n")
 
     _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.02)
     _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.02)
@@ -258,14 +277,24 @@ def get_mean_distances(dist_trans, dist_big, filename):
     std_dist_trans = np.std(dist_trans).item()
     std_dist_big = np.std(dist_big).item()
 
-    with open(f"../logfiles/{filename}") as logfile:
+    with open(f"/home/ubuntu/pipeline/logfiles/{filename}.txt", "a") as logfile:
         logfile.write(f"Mean Weighted Manhattan Distance between transformed distributions and target: "
                       f"{mean_dist_trans}\n"
                       f"Mean Weighted Manhattan Distance between untransformed distributions and target: "
                       f"{mean_dist_big}\n"
-                      f"Standard Deviation of the Weighted Manhattan Distances of the tranformed distributions: "
+                      f"Standard Deviation of the Weighted Manhattan Distances of the transformed distributions: "
                       f"{std_dist_trans}\n"
                       f"Standard Deviation of the Weighted Manhattan Distances of the untransformed distributions: "
                       f"{std_dist_big}")
 
     return mean_dist_trans - mean_dist_big, std_dist_trans - std_dist_big
+
+
+if __name__ == "__main__":
+    probs0 = np.array([[[0.2, 0.004, 0.01]]])
+    probs1 = np.array([[[0.5, 0.001, 0.005]]])
+    print(f"probs0: {probs0}")
+    print(f"probs1: {probs1}")
+
+    _, diff, _ = weightedManhattanDistance(probs1, probs0)
+    print(diff)

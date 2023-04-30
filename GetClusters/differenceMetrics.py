@@ -59,16 +59,20 @@ def bucket_diff_top_k(probs0, probs1, indices=None, top_p=None):  # top_p is dum
 
 
 def get_top_p_difference(probs0, probs1, indices=None, top_p=0.9):  # indices is dummy parameter, not used
-    cumsum0 = np.cumsum(probs0, axis=-1)
-    cumsum1 = np.cumsum(probs1, axis=-1)
-
+    sorted_probs0 = np.sort(probs0, axis=-1, kind='stable')
+    sorted_probs1 = np.sort(probs1, axis=-1, kind='stable')
+    cumsum0 = np.cumsum(sorted_probs0, axis=-1)
+    #print(f"cumsum0: {cumsum0}")
+    cumsum1 = np.cumsum(sorted_probs1, axis=-1)
+    #print(f"cumsum1: {cumsum1}")
     mask0 = cumsum0 >= top_p
     mask1 = cumsum1 >= top_p
 
-    if np.any(mask0) and np.any(mask1):
-        current_k0 = np.argmax(mask0) + 1
-        current_k1 = np.argmax(mask1) + 1
-        return current_k1 - current_k0
-    else:
-        print("Something went wrong!")
-        return False
+    current_k0 = np.argmax(mask0, axis=-1)
+    #print(f"current_k0: {current_k0}")
+    current_k1 = np.argmax(mask1, axis=-1)
+    #print(f"current_k1: {current_k1}")
+    diff = current_k1 - current_k0
+    #print(f"type(diff): {type(diff)}")
+    diff = np.expand_dims(diff, axis=-1)
+    return diff

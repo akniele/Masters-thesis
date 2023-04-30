@@ -1,6 +1,7 @@
 import sys
 import pickle
 import numpy as np
+from scipy.stats import entropy
 
 from GetClusters.clustering import k_means_clustering, label_distribution
 from GetClusters.featureVector import load_feature_vector
@@ -12,6 +13,7 @@ from GenerateData.generate_data import generateData
 from Transformation.transformation import transformations, get_distances
 import time
 from Transformation.transformation import get_mean_distances
+from Transformation.histogram_of_distances import difference_histogram
 import os
 
 
@@ -35,13 +37,18 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
     if not directory_exists:
         os.makedirs(model_path)
 
+    data_path = '/home/ubuntu/pipeline/train_data'  # create new directory for train data if it doesn't already exist
+    directory_exists = os.path.exists(data_path)
+    if not directory_exists:
+        os.makedirs(data_path)
+
     # ----- done making directories ------------------------------------------------------------- #
 
     if function.__name__ == "get_entropy_feature":
-        num_features = [1]
+        num_features = 1
         filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
-        with open(f"logfiles/filename", "a") as f:
-            f.write(f"Log file\n "
+        with open(f"logfiles/{filename}.txt", "w") as f:
+            f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
                     f"Number of clusters: {n_clusters}\n"
                     f"Batch size: {batch_size}\n"
@@ -53,10 +60,10 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
             f.close()
 
     elif function.__name__ == "bucket_diff_top_k":
-        num_features = [len(bucket_indices) + 1]
-        filename = f"{function.__name__}_{bucket_indices}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
-        with open(f"logfiles/filename", "a") as f:
-            f.write(f"Log file\n "
+        num_features = len(bucket_indices) + 1
+        filename = f"{function.__name__}_{bucket_indices}_{n_clusters}_{batch_size}_{epochs}_{lr}"
+        with open(f"logfiles/{filename}.txt", "w") as f:
+            f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
                     f"Bucket indices: {bucket_indices}\n"
                     f"Number of clusters: {n_clusters}\n"
@@ -69,19 +76,19 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
             f.close()
 
     elif function.__name__ == "get_top_p_difference":
-        num_features = [1]
+        num_features = 1
         filename = f"{function.__name__}_{top_p}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
-        with open(f"logfiles/filename", "a") as f:
-            f.write(f"Log file\n "
+        with open(f"logfiles/{filename}.txt", "w") as f:
+            f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
-                    f"Top-p: {top_p}"
+                    f"Top-p: {top_p}\n"
                     f"Number of clusters: {n_clusters}\n"
                     f"Batch size: {batch_size}\n"
                     f"Number of epochs: {epochs}\n"
                     f"Learning rate: {lr}\n"
                     f"Generate training data: {generate_data}\n"
                     f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
-                    f"Train classifier: {train_classifier}")
+                    f"Train classifier: {train_classifier}\n")
             f.close()
 
     else:
@@ -111,6 +118,7 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
                                                                  indices1,
                                                                  indices0,
                                                                  dict_means,
+                                                                 filename,
                                                                  bucket_indices=bucket_indices,
                                                                  top_p=top_p,
                                                                  function=function,
@@ -120,13 +128,18 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
     print(f"shape trans_distances: {trans_distances.shape}")
     print(f"original_distances: {original_distances.shape}")
 
+    difference_histogram(trans_distances, original_distances, filename)
+
+    # np.save(f'plots/trans_dist_{filename}', trans_distances)
+    # np.save(f'plots/orig_dist_{filename}', original_distances)
+
     score_mean, score_std = get_mean_distances(trans_distances, original_distances, filename)
     end = time.perf_counter()
 
-    with open(filename, "a") as f:
+    with open(f"logfiles/{filename}.txt", "a") as f:
         f.write(f"Difference in mean Weighted Manhattan Distance: {score_mean}\n"
                 f"Difference in standard deviation of Weighted Manhattan Distances: {score_std}\n"
-                f"elapsed time:{(end - start) / 60} minutes")
+                f"elapsed time:{(end - start) / 60} minutes\n")
 
     return score_mean
 
@@ -147,14 +160,12 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
     if generate_data:
         print("  => GENERATING DATA AND FEATURE VECTORS")
         generateData(function, bucket_indices, top_p, num_features=NUM_FEATURES,
-                     num_samples=100_000, truncate=True, topk=256, save=True,
-                     features_only=True, sorted_by_big=False)
+                     num_samples=100_000, truncate=True, topk=256, save=True, sorted_by_big=False)
 
     if generate_sorted_by_big_data:
         print("  => GENERATING DATA SORTED BY BIG MODEL")
         generateData(function, bucket_indices, top_p, num_features=NUM_FEATURES,
-                     num_samples=100_000, truncate=True, topk=256, save=True,
-                     features_only=True, sorted_by_big=True)
+                     num_samples=100_000, truncate=True, topk=256, save=True, sorted_by_big=True)
 
     print("  => LOADING SCALED FEATURES FOR CLUSTERING")
     scaled_features = load_feature_vector(function=function, num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS,
@@ -170,8 +181,8 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
         labels = k_means_clustering(scaled_features, N_CLUSTERS)
 
         labels_distribution = label_distribution(N_CLUSTERS, labels)
-        with open(f"logfiles/{filename}", "a") as logfile:
-            logfile.write(f"Label distribution of clustering: {labels_distribution}")
+        with open(f"logfiles/{filename}.txt", "a") as logfile:
+            logfile.write(f"Label distribution of clustering: {labels_distribution}\n")
     else:
         labels = None
 
@@ -179,10 +190,10 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
     dict_means = get_means_from_training_data(function=function, num_features=NUM_FEATURES,
                                               num_sheets=NUM_TRAIN_SHEETS, labels=labels)
 
-    with open(f"logfiles/{filename}", "a") as logfile:
+    with open(f"logfiles/{filename}.txt", "a") as logfile:
         logfile.write("Mean feature differences from training data:")
         for key, value in dict_means.items():
-            logfile.write(f"Feature: {key}\t Mean difference: {value}")
+            logfile.write(f"Feature: {key}\t Mean difference: {value}\n")
 
     if labels is not None:
         if train_classifier:
@@ -208,31 +219,24 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
 def load_test_data(num_test_samples, bucket_indices):
     print("  => LOAD DATA FOR TRANSFORMATION")
 
-    with open(f"train_data/train_big_100000_9.pkl", "rb") as f:
+    with open(f"train_data/big_10000_9.pkl", "rb") as f:
         bigprobs = pickle.load(f)
 
     bigprobs = bigprobs[:num_test_samples].numpy()
 
-    #max_probs = np.amax(bigprobs, axis=-1)
-    #min_of_max_probs = np.amin(max_probs)
-
-    #print(f"min of max probs: {min_of_max_probs}")
-
-    #upper_bound = - (math.log(1.7976931348623157e+308, min_of_max_probs))
-
-    with open(f"train_data/indices_big_100000_9.pkl", "rb") as g:
+    with open(f"train_data/indices_big_10000_9.pkl", "rb") as g:
         indices1 = pickle.load(g)
 
     indices1 = indices1[:num_test_samples].numpy()
 
     print("  => LOAD DATA FOR EVALUATION")
 
-    with open(f"train_data/train_small_100000_9.pkl", "rb") as f:
+    with open(f"train_data/small_10000_9.pkl", "rb") as f:
         smallprobs = pickle.load(f)
 
     smallprobs = smallprobs[:num_test_samples].numpy()
 
-    with open(f"train_data/indices_small_100000_9.pkl", "rb") as g:
+    with open(f"train_data/indices_small_10000_9.pkl", "rb") as g:
         indices0 = pickle.load(g)
 
     indices0 = indices0[:num_test_samples].numpy()
@@ -243,7 +247,7 @@ def load_test_data(num_test_samples, bucket_indices):
     return bigprobs, smallprobs, indices1, indices0
 
 
-def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
+def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means, filename,
                            bucket_indices, top_p, function, new_pred_labels, num_features):
 
     transformed_probs, original_probs = transformations(bigprobs,
@@ -252,16 +256,24 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                                                         num_features,
                                                         bucket_indices,
                                                         function,
-                                                        upper_bound=130,
+                                                        upper_bound=149,
                                                         top_p=top_p,
                                                         pred_labels=new_pred_labels)
 
     print(f"shape transformed_probs: {transformed_probs.shape}")
     print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
 
+    # entropy
+    transformed_entropy = np.mean(entropy(transformed_probs, axis=-1))
+    original_entropy = np.mean(entropy(original_probs, axis=-1))
+
+    with open(f"logfiles/{filename}.txt", "a") as logfile:
+        logfile.write(f"mean entropy of transformed distributions: {transformed_entropy}\n"
+                      f"mean entropy of original big distributions: {original_entropy}\n")
+
     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
                                                                 smallprobs,
-                                                                indices0)
+                                                                indices0, filename)
 
     trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)
