@@ -71,7 +71,7 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
 
 def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
-    bigprobs = np.expand_dims(bigprobs, 0)  # TODO: Figure out why you are expanding dimensions here??
+    bigprobs = np.expand_dims(bigprobs, 0)  # array has only two dimensions at this point
 
     sorted_indices = np.argsort(bigprobs, axis=-1, kind='stable')[:, :, ::-1]
 
@@ -119,42 +119,114 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
 
 def trans_2(probs, mean_k, top_p):
+    probs = np.expand_dims(probs, 0)
     sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
 
     depth = np.indices(probs.shape)[0]
     rows = np.indices(probs.shape)[1]
 
-    sorted_probs = probs[depth, rows, sorted_indices]
+    print("here?")
+    sorted_probs = probs[depth, rows, sorted_indices]  # sort probabilities descendingly, shape: (1, num_distr, 16384)
 
-    del probs
+    print(f"data type of sorted_probs: {sorted_probs.dtype}")
+    print(f"shape of sorted probs, after sorting: {sorted_probs.shape}")
+    print(f"sum of sorted probs, random distribution: {np.sum(sorted_probs[0,5])}")
+    print(f"smallest element in sorted_probs: {np.min(sorted_probs)}")
 
-    cumsum = np.cumsum(sorted_probs, axis=-1)
+    print("or here?")
+    cumsum = np.cumsum(sorted_probs, axis=-1)  # get the cumulative sum of each distribution
     mask = cumsum >= top_p
-    current_k = np.argmax(mask, axis=-1)
+    print("maybe somewhere here?")
+    current_k = np.argmax(mask, axis=-1)  # get the number of tokens the top-p probability mass is currently occupying
     current_k = np.expand_dims(current_k, -1)
 
-    target_k = current_k - mean_k
+    print("what about there?")
+    target_k = current_k - mean_k  # get the number of tokens we want top-p to be distributed over
 
     target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
 
-    idx_array = np.indices(sorted_probs.shape)[-1]
+    print("or in this place?")
+    idx_array = np.arange(sorted_probs.shape[-1])
+    idx_array = np.broadcast_to(idx_array, sorted_probs.shape)
 
-    mask = idx_array <= target_k
+    print("maybe this is where it is?")
+    mask = idx_array <= target_k  # create a boolean mask that is True if the index is bigger than the target index
 
-    sum_top_p = np.sum(sorted_probs, axis=-1, where=mask, keepdims=True)
-    sum_not_top = np.sum(sorted_probs, axis=-1, where=np.invert(mask), keepdims=True)
+    current_sum = np.sum(sorted_probs, axis=-1, where=mask)
+    print("or could be here?")
+    scaling_factor = 0.9 / (current_sum + np.finfo(float).eps)
+    print("is it the stupid scaling factor?")
+    scaling_factor = np.reshape(scaling_factor, (sorted_probs.shape[0], sorted_probs.shape[1], 1))
+    #print(f"scaling factor: {scaling_factor}")
+    print("or the tmp arrays?")
+    tmp = np.zeros(sorted_probs.shape)
+    print("maybe it's the temps")
+    tmp[mask] = sorted_probs[mask]
+    #print(f"tmp: {tmp}")
+    tmp *= scaling_factor
+    del scaling_factor
+    #print(f"tmp after scaling: {tmp}")
 
-    target_p = np.array([top_p, 1 - top_p])
+    print("second part of the function")
+    tmp_2 = np.zeros(sorted_probs.shape)
+    print("going strong")
+    current_sum_2 = 1 - current_sum
+    print("last one")
 
-    sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask)
-    sorted_probs = np.multiply(sorted_probs, target_p[0], where=mask)
-    sorted_probs = np.divide(sorted_probs, sum_not_top, where=np.invert(mask))
-    sorted_probs = np.multiply(sorted_probs, target_p[1], where=np.invert(mask))
+    print(f"number of zeros in array: {(current_sum_2.size - np.count_nonzero(current_sum_2))}")
+    scaling_factor_2 = 0.1 / (current_sum_2 + 10e-10)  #np.finfo(float).eps
+    print("here we are")
+    del current_sum_2
+    scaling_factor_2 = np.reshape(scaling_factor_2, (sorted_probs.shape[0], sorted_probs.shape[1], 1))
+    print("and now here")
+    inverted_mask = np.invert(mask)  # here it crashes!
+    del mask
+    tmp_2[inverted_mask] = sorted_probs[inverted_mask]
+    print("almost done now")
+    tmp_2 *= scaling_factor_2
+    print("finishline")
+    del scaling_factor_2
+    #print(f"tmp_2: after scaling: {tmp_2}")
 
-    final_probs = np.zeros(sorted_probs.shape)  # TODO: Check if this, and the unsorting, does what it is supposed to!
-    final_probs[depth, rows, sorted_indices] = sorted_probs  # unsort the probabilities
+    print("adding up the two arrays")
+    final_array = tmp + tmp_2
+    #print(f"final_array: {final_array}")
 
-    #final_probs = np.squeeze(final_probs, 0)
+    # cumsum = np.cumsum(sorted_probs, axis=-1)  # get the cumulative sum of each distribution
+    # mask = cumsum >= top_p
+    # current_k = np.argmax(mask, axis=-1)  # get the number of tokens the top-p probability mass is currently occupying
+    # current_k = np.expand_dims(current_k, -1)
+    #
+    # target_k = current_k - mean_k  # get the number of tokens we want top-p to be distributed over
+    #
+    # target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
+    #
+    # idx_array = np.arange(sorted_probs.shape[-1])
+    # idx_array = np.broadcast_to(idx_array, sorted_probs.shape)
+    #
+    # mask = idx_array <= target_k  # create a boolean mask that is True if the index is bigger than the target index
+    #
+    # sum_top_p = np.sum(sorted_probs, axis=-1, where=mask, keepdims=True)  # get the sum of the target_k probabilities
+    # sum_not_top = np.sum(sorted_probs, axis=-1, where=np.invert(mask), keepdims=True)  # get the inverse
+    #
+    # sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask, out=np.zeros_like(sorted_probs)) # divide the top-k probabilities by their current sum
+    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+    #
+    # sorted_probs = np.multiply(sorted_probs, top_p, where=mask, out=np.zeros_like(sorted_probs))  # divide them by the target sum
+    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+    #
+    # sorted_probs = np.divide(sorted_probs, sum_not_top, where=np.invert(mask), out=np.zeros_like(sorted_probs))  # same for the other probabilities
+    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+    #
+    # sorted_probs = np.multiply(sorted_probs, 1 - top_p, where=np.invert(mask), out=np.zeros_like(sorted_probs))
+    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+
+    print("sorting...")
+    final_probs = np.zeros(final_array.shape)  # TODO: Check if this, and the unsorting, does what it is supposed to!
+    final_probs[depth, rows, sorted_indices] = final_array  # unsort the probabilities
+    print(f"number of zeros in array: {(final_probs.size - np.count_nonzero(final_probs))}")
+
+    final_probs = np.squeeze(final_probs, 0)
 
     return final_probs
 
@@ -175,9 +247,11 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
     print(f"mean features: {mean_features}")
     print(f"type mean features: {type(mean_features)}")
 
+    print(f"zeros before filling up distribution: {np.min(bigprobs)}")
     print("  => FILL UP DISTRIBUTIONS")
     filled_up_probs = fill_multiple_distributions(bigprobs, indices)
     print("  => DONE FILLING UP DISTRIBUTIONS")
+    print(f"zeros after filling up distribution: {np.min(filled_up_probs)}")
 
     transformed_probs = filled_up_probs.copy()
     print(f"transformed probs shape: {transformed_probs.shape}")
@@ -285,7 +359,7 @@ def get_mean_distances(dist_trans, dist_big, filename):
                       f"Standard Deviation of the Weighted Manhattan Distances of the transformed distributions: "
                       f"{std_dist_trans}\n"
                       f"Standard Deviation of the Weighted Manhattan Distances of the untransformed distributions: "
-                      f"{std_dist_big}")
+                      f"{std_dist_big}\n")
 
     return mean_dist_trans - mean_dist_big, std_dist_trans - std_dist_big
 

@@ -10,13 +10,13 @@ either leave it the way it is or set it to None
 
 # -------- hyperparameters -------- #
 
-FUNCTION = get_top_p_difference  # bucket_diff_top_k  # get_entropy_feature
+FUNCTION = bucket_diff_top_k  # get_top_p_difference # get_entropy_feature
 BUCKET_INDICES = [10, 35]  # if bucket_diff_top_k, choose where buckets should start and end,
 # NB: 0 and len(distribution) are added automatically later!
 TOP_P = 0.9  # probability for get_top_p_difference transformation function
 N_CLUSTERS = 3  # number of clusters to use for k-means clustering, if None: no clustering or classifying!
 BATCH_SIZE = 16
-EPOCHS = 15
+EPOCHS = 25
 LR = 5e-5
 GENERATE_DATA = True  # if True, generates probability distributions as training data, and features
 GENERATE_SORTED_BY_BIG = False  # if True, generate probability distributions sorted by big model, for baseline

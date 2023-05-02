@@ -237,31 +237,6 @@ def main():
         print(f"final score: {score}")
 
 
-#@timeit
-def train_data_baseline(smalltop, bigidx, smallidx):
-    indx_tensor = torch.empty_like(smallidx)
-    for i, column in enumerate(tqdm.tqdm(smallidx)):
-        for j, row in enumerate(column):
-            tmp = torch.isin(smallidx[i][j], bigidx[i][j])
-            indx_tensor[i, j] = tmp
-
-    print(f"index tensor size: {indx_tensor.size()}")
-    print(f" index tensor first row: {indx_tensor[:1,:1]}")
-    print(f" index tensor random row: {indx_tensor[16:17, :1]}")
-
-    final_tensor = torch.zeros((smallidx.shape[0], smallidx.shape[1], smallidx.shape[2]+1))  # add column of zeros for 257th element
-    for i, column in enumerate(tqdm.tqdm(indx_tensor)):
-        for j, row in enumerate(column):
-            for k, element in enumerate(row):
-                if element == 1:
-                    idx = torch.where(bigidx[i, j] == smallidx[i, j, k])[0]
-                    final_tensor[i, j, idx] = smalltop[i, j, k].item()
-
-    print(f"final_tensor: {final_tensor}")
-
-    return final_tensor
-
-
 def add_sum_as_last_element(probs):
     sums = np.sum(probs, axis=-1)
     to_add = 1 - sums

@@ -15,6 +15,7 @@ import time
 from Transformation.transformation import get_mean_distances
 from Transformation.histogram_of_distances import difference_histogram
 import os
+import torch
 
 
 def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big, train_classifier,
@@ -209,20 +210,23 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
 
         print(f"new shape of pred labels: {new_pred_labels.shape}")
 
-        return new_pred_labels, dict_means
-
     else:
         new_pred_labels = None
-        return new_pred_labels, dict_means
+
+    return new_pred_labels, dict_means
 
 
 def load_test_data(num_test_samples, bucket_indices):
     print("  => LOAD DATA FOR TRANSFORMATION")
 
     with open(f"train_data/big_10000_9.pkl", "rb") as f:
-        bigprobs = pickle.load(f)
+        bigprobs = pickle.load(f)  # float32
 
-    bigprobs = bigprobs[:num_test_samples].numpy()
+    bigprobs = bigprobs.to(torch.float64)
+
+    bigprobs += 10e-10  # get rid of zeros by adding this very small value to each probability
+
+    bigprobs = bigprobs[:num_test_samples].numpy()  # still float32
 
     with open(f"train_data/indices_big_10000_9.pkl", "rb") as g:
         indices1 = pickle.load(g)
@@ -234,6 +238,8 @@ def load_test_data(num_test_samples, bucket_indices):
     with open(f"train_data/small_10000_9.pkl", "rb") as f:
         smallprobs = pickle.load(f)
 
+    smallprobs = smallprobs.to(torch.float64)
+    smallprobs += 10e-10
     smallprobs = smallprobs[:num_test_samples].numpy()
 
     with open(f"train_data/indices_small_10000_9.pkl", "rb") as g:
@@ -261,7 +267,9 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                                                         pred_labels=new_pred_labels)
 
     print(f"shape transformed_probs: {transformed_probs.shape}")
-    print(f" example of transformed probs: {transformed_probs[0][0][:30]}")
+    print(f" example of transformed probs: {transformed_probs[0][0][:500]}")
+    print(f"number of zeros in array: {(transformed_probs.size - np.count_nonzero(transformed_probs))}")
+    print(f"number of negative values in array: {np.sum(transformed_probs < 0)}")
 
     # entropy
     transformed_entropy = np.mean(entropy(transformed_probs, axis=-1))
