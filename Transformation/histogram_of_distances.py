@@ -18,3 +18,4 @@ def difference_histogram(trans_dist, original_dist, filename):
     plt.xlabel('Differences in weighted Manhattan distance')
     plt.title("Comparing the distribution of differences")
     plt.savefig(f"/home/ubuntu/pipeline/plots/difference_plot_{filename}.png")
+    plt.close()

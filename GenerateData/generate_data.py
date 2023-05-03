@@ -62,7 +62,7 @@ def generateData(function, bucket_indices, top_p, num_features, tokenized_data_p
         tmp_big = torch.zeros((200, SEQUENCE_LENGTH, VOCAB_LENGTH))
         tmp_small = torch.zeros((200, SEQUENCE_LENGTH, VOCAB_LENGTH))
 
-        if not sorted_by_big:
+        if not sorted_by_big and num_features is not None:
             features = torch.zeros((num_samples//10, sequence_length, num_features))
 
         print("  => DONE INITIALIZING ARRAYS")
@@ -112,15 +112,16 @@ def generateData(function, bucket_indices, top_p, num_features, tokenized_data_p
                     small_indices[index-200:index, :, :] = small_indx
                     big_indices[index - 200:index, :, :] = big_indx
 
-                    # ----- FEATURES ----- #
-                    tmp_small = tmp_small.numpy()
-                    tmp_big = tmp_big.numpy()
-                    print(f"  => CREATING FEATURE VECTOR")
-                    diffs = function(tmp_small, tmp_big, indices=bucket_indices, top_p=top_p)
-                    features[index - 200:index, :, :] = torch.from_numpy(diffs)
-                    print(f"  => DONE CREATING FEATURE VECTOR")
-                    tmp_small = torch.from_numpy(tmp_small)
-                    tmp_big = torch.from_numpy(tmp_big)
+                    if num_features is not None:
+                        # ----- FEATURES ----- #
+                        tmp_small = tmp_small.numpy()
+                        tmp_big = tmp_big.numpy()
+                        print(f"  => CREATING FEATURE VECTOR")
+                        diffs = function(tmp_small, tmp_big, indices=bucket_indices, top_p=top_p)
+                        features[index - 200:index, :, :] = torch.from_numpy(diffs)
+                        print(f"  => DONE CREATING FEATURE VECTOR")
+                        tmp_small = torch.from_numpy(tmp_small)
+                        tmp_big = torch.from_numpy(tmp_big)
 
                 else:
                     tmp_big = tmp_big.numpy()
@@ -163,5 +164,6 @@ def generateData(function, bucket_indices, top_p, num_features, tokenized_data_p
                 with open(f"../pipeline/train_data/indices_small_{num_samples//10}_{i}{sorting}.pkl", "wb") as k:
                     pickle.dump(small_indices, k)
 
-                with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
-                    pickle.dump(features, m)
+                if num_features is not None:
+                    with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
+                        pickle.dump(features, m)

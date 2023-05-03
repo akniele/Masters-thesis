@@ -8,6 +8,9 @@ import ClassifierFiles.plot_acc_and_loss as plot_acc_and_loss
 
 
 def train(model, filename, train_data, val_data, learning_rate, epochs, BATCH_SIZE, num_classes):
+    with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "w") as logfile:
+        logfile.write(f'Log file classifier\n')
+
     train, val = datasetTrain.Dataset(train_data), datasetTrain.Dataset(val_data)
 
     train_dataloader = torch.utils.data.DataLoader(train, BATCH_SIZE, shuffle=True)
@@ -79,7 +82,7 @@ def train(model, filename, train_data, val_data, learning_rate, epochs, BATCH_SI
             model.val_acc.append(total_acc_val / (len(val_data)*64))
             model.val_loss.append(total_loss_val / (len(val_data)*64))
 
-        with open(f"/home/ubuntu/pipeline/logfiles/{filename}.txt", "a") as logfile:
+        with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
             logfile.write(f'Epochs: {epoch_num} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | '
                           f'Train Accuracy: {total_acc_train / (len(train_data)*64): .4f} | Val Loss: '
                           f'{total_loss_val / (len(val_data)*64): .4f} | Val Accuracy: '

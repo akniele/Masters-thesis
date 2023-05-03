@@ -28,6 +28,8 @@ def save_confusion_matrix_to_file(true, pred, num_classes, filename):
     fx.yaxis.set_ticklabels([i for i in range(num_classes)])
     plt.tight_layout()
     plt.savefig(f"plots/matrix_{filename}.png")
+    plt.close()
 
     # get recall, precision, etc.
-    print(classification_report(true, pred, digits=4))
+    with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+        logfile.write(f"classification report:\n{classification_report(true, pred, digits=4)}")

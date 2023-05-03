@@ -4,12 +4,12 @@ from scipy.stats import entropy  # kl-divergence/relative entropy if optional pa
 
 
 def sort_probs(big_probs, small_probs=None):
-    big_probs = big_probs.numpy()
+    #big_probs = big_probs.numpy()
     indices = np.argsort(big_probs, axis=-1, kind='stable')  # get indices to sort by
     indices_reverse = indices[:, :, ::-1]
     big_probs_sorted = np.take_along_axis(big_probs, indices_reverse, axis=-1)
     if small_probs is not None:
-        small_probs = small_probs.numpy()
+        #small_probs = small_probs.numpy()
         small_probs_sorted = np.take_along_axis(small_probs, indices_reverse, axis=-1)
         return big_probs_sorted, small_probs_sorted, indices
 

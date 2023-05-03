@@ -14,12 +14,33 @@ from Transformation.transformation import transformations, get_distances
 import time
 from Transformation.transformation import get_mean_distances
 from Transformation.histogram_of_distances import difference_histogram
+from baseline_model import baseline
 import os
 import torch
 
 
-def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big, train_classifier,
-             bucket_indices, top_p, n_test_samples):
+def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, generate_sorted_by_big_data=False):
+    filename = f"baseline_{batch_size}_{epochs}_{lr}"
+    with open(f"logfiles/{filename}.txt", "w") as f:
+        f.write(f"Log file baseline\n"
+                f"Batch size: {batch_size}\n"
+                f"Number of epochs: {epochs}\n"
+                f"Learning rate: {lr}\n")
+    if generate_data:
+        print("  => GENERATING DATA AND FEATURE VECTORS")
+        generateData(function=None, bucket_indices=None, top_p=None, num_features=None,
+                     num_samples=100_000, truncate=True, topk=256, save=True, sorted_by_big=False)
+
+    if generate_sorted_by_big_data:
+        print("  => GENERATING DATA SORTED BY BIG MODEL")
+        generateData(function=None, bucket_indices=None, top_p=None, num_features=None,
+                     num_samples=100_000, truncate=True, topk=256, save=True, sorted_by_big=True)
+
+    baseline(n_test_samples, batch_size, epochs, lr, filename=filename)
+
+
+def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big,
+                             train_classifier, bucket_indices, top_p, n_test_samples):
 
     # ----- make directories for log files, plots and models if they don't already exist -------- #
 
@@ -47,7 +68,7 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
 
     if function.__name__ == "get_entropy_feature":
         num_features = 1
-        filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
+        filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -78,7 +99,7 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
 
     elif function.__name__ == "get_top_p_difference":
         num_features = 1
-        filename = f"{function.__name__}_{top_p}_{n_clusters}_{batch_size}_{epochs}_{lr}.txt"
+        filename = f"{function.__name__}_{top_p}_{n_clusters}_{batch_size}_{epochs}_{lr}"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -142,8 +163,6 @@ def pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, genera
                 f"Difference in standard deviation of Weighted Manhattan Distances: {score_std}\n"
                 f"elapsed time:{(end - start) / 60} minutes\n")
 
-    return score_mean
-
 
 def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr, num_test_samples, num_features,
           filename, generate_data=False, generate_sorted_by_big_data=False, train_classifier=False):
@@ -192,7 +211,7 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
                                               num_sheets=NUM_TRAIN_SHEETS, labels=labels)
 
     with open(f"logfiles/{filename}.txt", "a") as logfile:
-        logfile.write("Mean feature differences from training data:")
+        logfile.write("Mean feature differences from training data:\n")
         for key, value in dict_means.items():
             logfile.write(f"Feature: {key}\t Mean difference: {value}\n")
 
@@ -267,11 +286,14 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                                                         pred_labels=new_pred_labels)
 
     print(f"shape transformed_probs: {transformed_probs.shape}")
-    print(f" example of transformed probs: {transformed_probs[0][0][:500]}")
     print(f"number of zeros in array: {(transformed_probs.size - np.count_nonzero(transformed_probs))}")
     print(f"number of negative values in array: {np.sum(transformed_probs < 0)}")
 
-    # entropy
+    epsilon = 10e-10
+
+    transformed_probs += epsilon  # to get rid of any potential 0s in the distributions
+    original_probs += epsilon
+
     transformed_entropy = np.mean(entropy(transformed_probs, axis=-1))
     original_entropy = np.mean(entropy(original_probs, axis=-1))
 
@@ -281,7 +303,7 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
 
     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
                                                                 smallprobs,
-                                                                indices0, filename)
+                                                                indices0, filename, epsilon)
 
     trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)

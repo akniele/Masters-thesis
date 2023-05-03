@@ -70,17 +70,21 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
 
 
 def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
+    print(f"number of zeros in array: {(bigprobs.size - np.count_nonzero(bigprobs))}")
+    print(f"number of negative values in array: {np.sum(bigprobs < 0)}")
 
     bigprobs = np.expand_dims(bigprobs, 0)  # array has only two dimensions at this point
 
     sorted_indices = np.argsort(bigprobs, axis=-1, kind='stable')[:, :, ::-1]
 
-    depth = np.indices(bigprobs.shape)[0]
-    rows = np.indices(bigprobs.shape)[1]
+    depth, rows = np.indices(bigprobs.shape)[:2]
 
     sorted_big_probs = bigprobs[depth, rows, sorted_indices]
 
-    del bigprobs
+    print(f"number of zeros in array: {(bigprobs.size - np.count_nonzero(bigprobs))}")
+    print(f"number of negative values in array: {np.sum(bigprobs < 0)}")
+
+    #del bigprobs
 
     current_bucket_probs = np.ones((sorted_big_probs.shape[0], sorted_big_probs.shape[1], len(bucket_indices)-1))
 
@@ -93,8 +97,8 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
     output = min_cols < 0  # create boolean mask, True if there's a bucket prob < 0, else False
 
-    def add_min_and_normalize(x):  # called if there's a bucket prob < 0, adds this prob to all probs, then normalizes
-        x2 = x + np.expand_dims(abs(np.min(x, axis=-1)), -1)
+    def add_min_and_normalize(x, epsilon=10e-10):  # called if there's a bucket prob < 0, adds this prob to all probs, then normalizes
+        x2 = x + epsilon + np.expand_dims(abs(np.min(x, axis=-1)), -1)  # this can give zero probability
         return x2 / np.expand_dims(np.sum(x2, axis=-1), -1)
 
     def normalize(x):  # normalizes the probabilities (squeezes them between 0 and 1)
@@ -103,17 +107,25 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     new_bucket_trans[output, :] = add_min_and_normalize(new_bucket_trans[output, :])  # apply add_min_and_normalize to rows with bucket prob < 0
     new_bucket_trans[~output, :] = normalize(new_bucket_trans[~output, :])  # apply normalize function to rows without bucket prob < 0
 
-    target_transformation = new_bucket_trans - current_bucket_probs # get final bucket transformation, i.e. how much to add / subtract from each bucket after normalization
+    target_transformation = new_bucket_trans - current_bucket_probs  # get final bucket transformation, i.e. how much to add / subtract from each bucket after normalization
 
     for i, index in enumerate(bucket_indices[:-1]):  # get current bucket probabilities
         sorted_big_probs[:, :, index:bucket_indices[i+1]] = sorted_big_probs[:, :, index:bucket_indices[i + 1]] + \
                                                      np.expand_dims(target_transformation[:, :, i] /
                                                                     (bucket_indices[i + 1] - index), -1)
 
-    final_probs = np.zeros(sorted_big_probs.shape)  # TODO: Check if this, and the unsorting, does what it is supposed to!
+    sorted_big_probs = add_min_and_normalize(sorted_big_probs)
+
+    print(f"after transformation number of zeros in array: {(sorted_big_probs.size - np.count_nonzero(sorted_big_probs))}")
+    print(f"after transformation number of negative values in array: {np.sum(sorted_big_probs < 0)}")
+
+    final_probs = np.zeros(sorted_big_probs.shape)
     final_probs[depth, rows, sorted_indices] = sorted_big_probs  # unsort the probabilities
 
     final_probs = np.squeeze(final_probs, 0)
+
+    print(f"after sorting number of zeros in array: {(final_probs.size - np.count_nonzero(final_probs))}")
+    print(f"after sorting number of negative values in array: {np.sum(final_probs < 0)}")
 
     return final_probs
 
@@ -222,7 +234,7 @@ def trans_2(probs, mean_k, top_p):
     # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
 
     print("sorting...")
-    final_probs = np.zeros(final_array.shape)  # TODO: Check if this, and the unsorting, does what it is supposed to!
+    final_probs = np.zeros(final_array.shape)
     final_probs[depth, rows, sorted_indices] = final_array  # unsort the probabilities
     print(f"number of zeros in array: {(final_probs.size - np.count_nonzero(final_probs))}")
 
@@ -312,7 +324,7 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
     return transformed_probs, filled_up_probs
 
 
-def get_distances(transformed_probs, bigprobs, smallprobs, small_indices, filename):
+def get_distances(transformed_probs, bigprobs, smallprobs, small_indices, filename, epsilon):
     """
     1. Fill up distributions from the smaller model
     2. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
@@ -327,6 +339,7 @@ def get_distances(transformed_probs, bigprobs, smallprobs, small_indices, filena
 
     filled_up_small_probs = fill_multiple_distributions(smallprobs, small_indices)
 
+    filled_up_small_probs += epsilon
     small_entropy = np.mean(entropy(filled_up_small_probs, axis=-1))
 
     with open(f"/home/ubuntu/pipeline/logfiles/{filename}.txt", "a") as logfile:

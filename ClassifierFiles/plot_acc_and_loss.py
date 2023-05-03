@@ -24,6 +24,7 @@ def acc_loss_plot(records, filename):
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     fig.legend(loc='center right', bbox_to_anchor=(0.85, 0.55))
     plt.savefig(f'/home/ubuntu/pipeline/plots/acc_loss_{filename}.png')
+    plt.close()
 
 
 def loss_plot(records, file_name):  # for baseline model (we are not calculating the accuracy for this one)
@@ -39,4 +40,5 @@ def loss_plot(records, file_name):  # for baseline model (we are not calculating
 
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     fig.legend(loc='center right', bbox_to_anchor=(0.85, 0.55))
-    plt.savefig(f'/home/ubuntu/pipeline/plots/{file_name}')
+    plt.savefig(f'/home/ubuntu/pipeline/plots/{file_name}.png')
+    plt.close()

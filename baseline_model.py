@@ -18,25 +18,19 @@ This baseline model maps transforms the probability distributions of one model t
 more closely resemble the probability distributions of a different model.
 """
 
-
-BATCH_SIZE = 8
-EPOCHS = 20
-LEARNING_RATE = 1e-4
 DEVICE = "cuda:0"
 SEQUENCE_LENGTH = 64
 VOCAB_LENGTH = 16384
 VOCAB_AFTER_REDUCTION = 257
-N_TEST_SAMPLES = 500
-LOSS_PLOT_NAME = f"loss_plot.png"
 NUM_TRAIN_SHEETS = 10_000
 
 
-def main():
+def baseline(n_test_samples, batch_size, epochs, lr, filename):
     print("  => LOADING MODEL")
     model = MODEL(VOCAB_AFTER_REDUCTION).to(DEVICE)
 
     print("  => LOADING OPTIMIZER")
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     print("  => PREPARE TRAINING DATA FOR CLASSIFIER")
 
@@ -82,30 +76,30 @@ def main():
                                 [int(.8 * len(df_final))])
 
     trainDataset = Dataset(df_train)
-    trainLoader = torch.utils.data.DataLoader(trainDataset, batch_size=BATCH_SIZE)
+    trainLoader = torch.utils.data.DataLoader(trainDataset, batch_size=batch_size)
     valDataset = Dataset(df_val)
-    valLoader = torch.utils.data.DataLoader(valDataset, batch_size=BATCH_SIZE)
+    valLoader = torch.utils.data.DataLoader(valDataset, batch_size=batch_size)
 
     print("  => PREPARING TEST DATA FOR CLASSIFIER")
 
     with open(f"train_data/train_big_10000_9.pkl", "rb") as f:  # the big and small probs are sorted separately
         probs1 = pickle.load(f)
-        probs1 = probs1[:N_TEST_SAMPLES]
+        probs1 = probs1[:n_test_samples]
     with open(f"train_data/train_small_10000_9.pkl", "rb") as g:
         probs0 = pickle.load(g)
-        probs0 = probs0[:N_TEST_SAMPLES]
+        probs0 = probs0[:n_test_samples]
     with open(f"train_data/indices_big_10000_9.pkl", "rb") as h:
         indices = pickle.load(h)
-        indices = indices[:N_TEST_SAMPLES]
+        indices = indices[:n_test_samples]
     with open(f"train_data/indices_small_10000_9.pkl", "rb") as k:
         indices0 = pickle.load(k)
-        indices0 = indices0[:N_TEST_SAMPLES]
+        indices0 = indices0[:n_test_samples]
 
     with open(f"train_data/small_10000_9sep.pkl", "rb") as g:  # the small probs are sorted by the big probs
         test_small = pickle.load(g)
-        test_small = test_small[:N_TEST_SAMPLES]
+        test_small = test_small[:n_test_samples]
 
-    tmp_zeros = np.zeros((N_TEST_SAMPLES, 64, 1))
+    tmp_zeros = np.zeros((n_test_samples, 64, 1))
     probs1 = np.concatenate((probs1, tmp_zeros), axis=-1)  # add column of zeros for 257th element
     probs0 = np.concatenate((probs0, tmp_zeros), axis=-1)  # add column of zeros for 257th element
     test_small = np.concatenate((test_small, tmp_zeros), axis=-1) # add column of zeros for 257th element
@@ -134,17 +128,17 @@ def main():
     df_test = pd.concat([df_big, df_small, df_indx, df_small_indx, df_test_small], axis=1, ignore_index=False)
 
     testDataset = DatasetTest(df_test)
-    testLoader = torch.utils.data.DataLoader(testDataset, batch_size=BATCH_SIZE)
+    testLoader = torch.utils.data.DataLoader(testDataset, batch_size=batch_size)
 
     print("  => TRAINING")
-    for epoch in range(EPOCHS):
+    for epoch in range(epochs):
         model.train()
 
         total_loss_train = 0
         for bigprobs, smallprobs in tqdm.tqdm(trainLoader):
             optimizer.zero_grad()
 
-            bigprobs = bigprobs.squeeze().to(DEVICE)  # [BATCH_SIZE, SEQUENCE_LENGTH, VOCAB_LENGTH]
+            bigprobs = bigprobs.squeeze().to(DEVICE)  # [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
             smallprobs = smallprobs.squeeze().to(DEVICE)
 
             pred_samples = model.forward(bigprobs)
@@ -177,15 +171,16 @@ def main():
 
             model.val_loss.append(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION))
 
-        print(
-            f'Epochs: {epoch + 1} | Train Loss: {(total_loss_train / (len(df_train)*64*VOCAB_AFTER_REDUCTION)): .4f} | '
-            f'Val Loss: {(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)): .4f}')
+        with open(f"logfiles/{filename}.txt", "a") as logfile:
+            logfile.write(f'Epochs: {epoch + 1} | Train Loss: '
+                          f'{(total_loss_train / (len(df_train)*64*VOCAB_AFTER_REDUCTION)): .4f} | '
+                          f'Val Loss: {(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)): .4f}\n\n')
 
     loss_dict = defaultdict()
     loss_dict["train_loss"] = model.train_loss
     loss_dict["val_loss"] = model.val_loss
 
-    plot_acc_and_loss.loss_plot(loss_dict, LOSS_PLOT_NAME)
+    plot_acc_and_loss.loss_plot(loss_dict, f"loss_{filename}")
 
     print("\n\n\n\n")
     print("--------------------")
@@ -195,10 +190,10 @@ def main():
 
     total_test_loss = 0
     with torch.no_grad():
-        trans_distances = np.zeros((N_TEST_SAMPLES, 64, 1))
-        original_distances = np.zeros((N_TEST_SAMPLES, 64, 1))
+        trans_distances = np.zeros((n_test_samples, 64, 1))
+        original_distances = np.zeros((n_test_samples, 64, 1))
         for i, (bigprobs, smallprobs, bigindices, smallindices, test_small) in enumerate(tqdm.tqdm(testLoader)):
-            bigprobs = bigprobs.squeeze().to(DEVICE)  # [BATCH_SIZE, SEQUENCE_LENGTH, VOCAB_LENGTH]
+            bigprobs = bigprobs.squeeze().to(DEVICE)  # [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
             smallprobs = smallprobs.squeeze().to(DEVICE)
             smallindices = smallindices.to(DEVICE)
             bigindices = bigindices.to(DEVICE)
@@ -227,14 +222,16 @@ def main():
             dist_trans_tmp = np.expand_dims(dist_trans_tmp, -1)
             dist_big_tmp = np.expand_dims(dist_big_tmp, -1)
 
-            trans_distances[i*BATCH_SIZE:(i+1)*BATCH_SIZE] = dist_trans_tmp
-            original_distances[i*BATCH_SIZE:(i+1)*BATCH_SIZE] = dist_big_tmp
+            trans_distances[i*batch_size:(i+1)*batch_size] = dist_trans_tmp
+            original_distances[i*batch_size:(i+1)*batch_size] = dist_big_tmp
 
-        print(f"Test loss: {(total_test_loss / (len(df_test)*64*VOCAB_AFTER_REDUCTION))}")
+        with open(f"logfiles/{filename}.txt", "a") as logfile:
+            logfile.write(f"Test loss: {(total_test_loss / (len(df_test)*64*VOCAB_AFTER_REDUCTION))}")
 
         score = get_mean_distances(trans_distances, original_distances)
 
-        print(f"final score: {score}")
+        with open(f"logfiles/{filename}.txt", "a") as logfile:
+            logfile.write(f"final score: {score}")
 
 
 def add_sum_as_last_element(probs):
@@ -337,7 +334,3 @@ class MODEL(nn.Module):
         x = self.l4(x)
         x = self.softmax(x)
         return x
-
-
-if __name__ == '__main__':
-    main()
