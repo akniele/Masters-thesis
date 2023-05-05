@@ -14,6 +14,7 @@ from Transformation.transformation import transformations, get_distances
 import time
 from Transformation.transformation import get_mean_distances
 from Transformation.histogram_of_distances import difference_histogram
+from Transformation.fill_up_distributions import fill_multiple_distributions
 from baseline_model import baseline
 import os
 import torch
@@ -36,7 +37,11 @@ def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, ge
         generateData(function=None, bucket_indices=None, top_p=None, num_features=None,
                      num_samples=100_000, truncate=True, topk=256, save=True, sorted_by_big=True)
 
+    start = time.perf_counter()
     baseline(n_test_samples, batch_size, epochs, lr, filename=filename)
+    end = time.perf_counter()
+    with open(f"logfiles/{filename}.txt", "a") as f:
+        f.write(f"elapsed time:{(end - start) / 60} minutes\n")
 
 
 def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big,
@@ -78,12 +83,12 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
                     f"Learning rate: {lr}\n"
                     f"Generate training data: {generate_data}\n"
                     f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
-                    f"Train classifier: {train_classifier}")
+                    f"Train classifier: {train_classifier}\n")
             f.close()
 
     elif function.__name__ == "bucket_diff_top_k":
         num_features = len(bucket_indices) + 1
-        filename = f"{function.__name__}_{bucket_indices}_{n_clusters}_{batch_size}_{epochs}_{lr}"
+        filename = f"{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}_{n_clusters}_{batch_size}_{epochs}_{lr}"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -145,15 +150,10 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
                                                                  top_p=top_p,
                                                                  function=function,
                                                                  new_pred_labels=new_pred_labels,
-                                                                 num_features=num_features)
-
-    print(f"shape trans_distances: {trans_distances.shape}")
-    print(f"original_distances: {original_distances.shape}")
+                                                                 num_features=num_features,
+                                                                 n_test_samples=n_test_samples)
 
     difference_histogram(trans_distances, original_distances, filename)
-
-    # np.save(f'plots/trans_dist_{filename}', trans_distances)
-    # np.save(f'plots/orig_dist_{filename}', original_distances)
 
     score_mean, score_std = get_mean_distances(trans_distances, original_distances, filename)
     end = time.perf_counter()
@@ -191,11 +191,6 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
     scaled_features = load_feature_vector(function=function, num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS,
                                           scaled=True)
 
-    print(f"Shape of scaled features: {scaled_features.shape}")
-
-    print(scaled_features[:3])
-    print(scaled_features[(NUM_TRAIN_SHEETS*64)-1:(NUM_TRAIN_SHEETS*64)+3])
-
     if N_CLUSTERS is not None:
         print("  => CLUSTERING")
         labels = k_means_clustering(scaled_features, N_CLUSTERS)
@@ -226,8 +221,6 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
         print(f"pred labels: {new_pred_labels[:50]}")
 
         new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
-
-        print(f"new shape of pred labels: {new_pred_labels.shape}")
 
     else:
         new_pred_labels = None
@@ -273,7 +266,10 @@ def load_test_data(num_test_samples, bucket_indices):
 
 
 def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means, filename,
-                           bucket_indices, top_p, function, new_pred_labels, num_features):
+                           bucket_indices, top_p, function, new_pred_labels, num_features, n_test_samples):
+    epsilon = 10e-10
+    bigprobs += epsilon
+    smallprobs += epsilon
 
     transformed_probs, original_probs = transformations(bigprobs,
                                                         indices1,
@@ -289,21 +285,39 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
     print(f"number of zeros in array: {(transformed_probs.size - np.count_nonzero(transformed_probs))}")
     print(f"number of negative values in array: {np.sum(transformed_probs < 0)}")
 
-    epsilon = 10e-10
-
     transformed_probs += epsilon  # to get rid of any potential 0s in the distributions
     original_probs += epsilon
 
+    filled_up_small_probs = fill_multiple_distributions(smallprobs, indices0)
+    filled_up_small_probs += epsilon
+
+    small_entropy = np.mean(entropy(filled_up_small_probs, axis=-1))
     transformed_entropy = np.mean(entropy(transformed_probs, axis=-1))
     original_entropy = np.mean(entropy(original_probs, axis=-1))
 
     with open(f"logfiles/{filename}.txt", "a") as logfile:
         logfile.write(f"mean entropy of transformed distributions: {transformed_entropy}\n"
-                      f"mean entropy of original big distributions: {original_entropy}\n")
+                      f"mean entropy of original big distributions: {original_entropy}\n"
+                      f"mean entropy of original small distributions: {small_entropy}\n")
+
+    index_highest_prob_big = np.argmax(original_probs, axis=-1)
+    index_highest_prob_trans = np.argmax(transformed_probs, axis=-1)
+    index_highest_prob_small = np.argmax(filled_up_small_probs, axis=-1)
+
+    accuracy_trans_tmp = index_highest_prob_trans == index_highest_prob_small
+    accuracy_orig_tmp = index_highest_prob_big == index_highest_prob_small
+
+    accuracy_trans = np.count_nonzero(accuracy_trans_tmp) / (n_test_samples * 64)
+    accuracy_orig = np.count_nonzero(accuracy_orig_tmp) / (n_test_samples * 64)
+
+    with open(f"logfiles/{filename}.txt", "a") as logfile:
+        logfile.write(f"Percentage of true tokens that had the highest probability in the original "
+                      f"distributions: {accuracy_orig}%\n"
+                      f"Percentage of true tokens that had the highest probability in the transformed "
+                      f"distributions: {accuracy_trans}%\n")
 
     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
-                                                                smallprobs,
-                                                                indices0, filename, epsilon)
+                                                                filled_up_small_probs)
 
     trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)

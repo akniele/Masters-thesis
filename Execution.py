@@ -19,13 +19,13 @@ N_TEST_SAMPLES = 500  # number of samples used for testing, each sample consists
 
 # -------- hyperparameters for transparent pipeline -------- #
 
-FUNCTION = bucket_diff_top_k  # get_top_p_difference # get_entropy_feature
+FUNCTION = get_entropy_feature  # bucket_diff_top_k  # get_top_p_difference
 BUCKET_INDICES = [50, 200]  # if bucket_diff_top_k, choose where buckets should start and end,
 # NB: 0 and len(distribution) are added automatically later!
 TOP_P = 0.9  # probability for get_top_p_difference transformation function
-N_CLUSTERS = 3  # number of clusters to use for k-means clustering, if None: no clustering or classifying!
+  # number of clusters to use for k-means clustering, if None: no clustering or classifying!
 BATCH_SIZE = 16
-EPOCHS = 15
+EPOCHS = 16
 LR = 5e-5
 TRAIN_CLASSIFIER = True  # if True, trains a new classifier
 
@@ -35,17 +35,19 @@ TRAIN_CLASSIFIER = True  # if True, trains a new classifier
 # --------- hyperparameters for baseline model -------#
 
 LR_BASELINE = 1e-5
-EPOCHS_BASELINE = 70
+EPOCHS_BASELINE = 60
 BATCH_SIZE_BASELINE = 8
 
 # --------- end hyperparameters for baseline model -------#
 
 if __name__ == "__main__":
 
-    run_baseline(n_test_samples=N_TEST_SAMPLES, batch_size=BATCH_SIZE_BASELINE, epochs=EPOCHS_BASELINE, lr=LR_BASELINE,
-                 generate_data=GENERATE_DATA, generate_sorted_by_big_data=GENERATE_SORTED_BY_BIG)
+    # run_baseline(n_test_samples=N_TEST_SAMPLES, batch_size=BATCH_SIZE_BASELINE, epochs=EPOCHS_BASELINE, lr=LR_BASELINE,
+    #              generate_data=GENERATE_DATA, generate_sorted_by_big_data=GENERATE_SORTED_BY_BIG)
 
-    run_transparent_pipeline(function=FUNCTION, n_clusters=N_CLUSTERS, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR,
-                             generate_data=GENERATE_DATA, generate_sorted_by_big=GENERATE_SORTED_BY_BIG,
-                             train_classifier=TRAIN_CLASSIFIER, bucket_indices=BUCKET_INDICES, top_p=TOP_P,
-                             n_test_samples=N_TEST_SAMPLES)
+    for number in [3, 4, 5]:
+        N_CLUSTERS = number
+        run_transparent_pipeline(function=FUNCTION, n_clusters=N_CLUSTERS, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR,
+                                 generate_data=GENERATE_DATA, generate_sorted_by_big=GENERATE_SORTED_BY_BIG,
+                                 train_classifier=TRAIN_CLASSIFIER, bucket_indices=BUCKET_INDICES, top_p=TOP_P,
+                                 n_test_samples=N_TEST_SAMPLES)

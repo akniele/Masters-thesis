@@ -257,7 +257,6 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
     """
 
     print(f"mean features: {mean_features}")
-    print(f"type mean features: {type(mean_features)}")
 
     print(f"zeros before filling up distribution: {np.min(bigprobs)}")
     print("  => FILL UP DISTRIBUTIONS")
@@ -266,7 +265,6 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
     print(f"zeros after filling up distribution: {np.min(filled_up_probs)}")
 
     transformed_probs = filled_up_probs.copy()
-    print(f"transformed probs shape: {transformed_probs.shape}")
 
     if pred_labels is not None:
         unique_labels = np.unique(pred_labels)
@@ -324,35 +322,21 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
     return transformed_probs, filled_up_probs
 
 
-def get_distances(transformed_probs, bigprobs, smallprobs, small_indices, filename, epsilon):
+def get_distances(transformed_probs, bigprobs, smallprobs):
     """
-    1. Fill up distributions from the smaller model
-    2. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
-    3. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
-    4. See if distance between transformed and small probs is smaller than between original big probs and small probs
-    5. return mean distance between trans and small probs minus mean distance between big and small probs
+    1. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
+    2. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
+    3. See if distance between transformed and small probs is smaller than between original big probs and small probs
+    4. return mean distance between trans and small probs minus mean distance between big and small probs
+    :param small_indices:
     :param transformed_probs:
     :param bigprobs:
     :param smallprobs:
     :return:
     """
 
-    filled_up_small_probs = fill_multiple_distributions(smallprobs, small_indices)
-
-    filled_up_small_probs += epsilon
-    small_entropy = np.mean(entropy(filled_up_small_probs, axis=-1))
-
-    with open(f"/home/ubuntu/pipeline/logfiles/{filename}.txt", "a") as logfile:
-        logfile.write(f"mean entropy of original small distributions: {small_entropy}\n")
-
-    _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, filled_up_small_probs, probScaleLimit=0.02)
-    _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, filled_up_small_probs, probScaleLimit=0.02)
-
-    print(f"shape dist_trans tmp: {dist_trans_tmp.shape}")
-    print(f"shape dist_big tmp: {dist_big_tmp.shape}")
-
-    print(f"type dist_big tmp: {type(dist_big_tmp)}")
-    print(f"dtype dist_trans tmp: {dist_trans_tmp.dtype}")
+    _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, smallprobs, probScaleLimit=0.02)
+    _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, smallprobs, probScaleLimit=0.02)
 
     return dist_trans_tmp, dist_big_tmp
 

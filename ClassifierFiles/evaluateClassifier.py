@@ -39,7 +39,8 @@ def evaluate(model, test_data, filename, num_classes):
             acc = (output.argmax(dim=1) == test_label).sum().item()
             total_acc_test += acc
 
-    print(f'Test Accuracy: {total_acc_test / (len(test_data)*64): .3f}')
+    with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+        logfile.write(f'Test Accuracy: {total_acc_test / (len(test_data)*64): .3f}')
 
     first_class = len([x for x in true_labels if x == 0])
     second_class = len([x for x in true_labels if x == 1])

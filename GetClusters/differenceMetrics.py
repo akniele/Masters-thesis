@@ -36,11 +36,8 @@ def bucket_diff_top_k(probs0, probs1, indices=None, top_p=None):  # top_p is dum
         indices = [10, 35]
 
     big_sample_sorted, small_sample_sorted, _ = sort_probs(probs1, probs0)
-    print(f"big_sample_sorted.shape: {big_sample_sorted.shape}")
     split_probs_big = np.split(big_sample_sorted, indices, axis=-1)
-    print(f"split_probs_big: {split_probs_big}")
     split_probs_small = np.split(small_sample_sorted, indices, axis=-1)
-    print(f"split_probs_small: {split_probs_small}")
 
     def calculate_bucket_diff(distr1, distr0):
         """
@@ -62,17 +59,12 @@ def get_top_p_difference(probs0, probs1, indices=None, top_p=0.9):  # indices is
     sorted_probs0 = np.sort(probs0, axis=-1, kind='stable')
     sorted_probs1 = np.sort(probs1, axis=-1, kind='stable')
     cumsum0 = np.cumsum(sorted_probs0, axis=-1)
-    #print(f"cumsum0: {cumsum0}")
     cumsum1 = np.cumsum(sorted_probs1, axis=-1)
-    #print(f"cumsum1: {cumsum1}")
     mask0 = cumsum0 >= top_p
     mask1 = cumsum1 >= top_p
 
     current_k0 = np.argmax(mask0, axis=-1)
-    #print(f"current_k0: {current_k0}")
     current_k1 = np.argmax(mask1, axis=-1)
-    #print(f"current_k1: {current_k1}")
     diff = current_k1 - current_k0
-    #print(f"type(diff): {type(diff)}")
     diff = np.expand_dims(diff, axis=-1)
     return diff
