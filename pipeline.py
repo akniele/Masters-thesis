@@ -188,8 +188,8 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
                      num_samples=100_000, truncate=True, topk=256, save=True, sorted_by_big=True)
 
     print("  => LOADING SCALED FEATURES FOR CLUSTERING")
-    scaled_features = load_feature_vector(function=function, num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS,
-                                          scaled=True)
+    scaled_features = load_feature_vector(function=function, bucket_indices=bucket_indices, top_p=top_p,
+                                          num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
 
     if N_CLUSTERS is not None:
         print("  => CLUSTERING")
@@ -202,8 +202,8 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
         labels = None
 
     print("  => GET MEAN FEATURES FROM TRAINING DATA")
-    dict_means = get_means_from_training_data(function=function, num_features=NUM_FEATURES,
-                                              num_sheets=NUM_TRAIN_SHEETS, labels=labels)
+    dict_means = get_means_from_training_data(function=function, bucket_indices=bucket_indices, top_p=top_p,
+                                              num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS, labels=labels)
 
     with open(f"logfiles/{filename}.txt", "a") as logfile:
         logfile.write("Mean feature differences from training data:\n")
@@ -277,7 +277,7 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                                                         num_features,
                                                         bucket_indices,
                                                         function,
-                                                        upper_bound=149,
+                                                        upper_bound=141.356,
                                                         top_p=top_p,
                                                         pred_labels=new_pred_labels)
 
@@ -288,11 +288,18 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
     transformed_probs += epsilon  # to get rid of any potential 0s in the distributions
     original_probs += epsilon
 
+    print("added epsilon")
+
     filled_up_small_probs = fill_multiple_distributions(smallprobs, indices0)
+    print("filled up small probs")
     filled_up_small_probs += epsilon
 
+    print("calculating entropy")
+
     small_entropy = np.mean(entropy(filled_up_small_probs, axis=-1))
+    print("second one")
     transformed_entropy = np.mean(entropy(transformed_probs, axis=-1))
+    print("last one")
     original_entropy = np.mean(entropy(original_probs, axis=-1))
 
     with open(f"logfiles/{filename}.txt", "a") as logfile:
@@ -300,14 +307,25 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                       f"mean entropy of original big distributions: {original_entropy}\n"
                       f"mean entropy of original small distributions: {small_entropy}\n")
 
+    del small_entropy
+    del transformed_entropy
+    del original_entropy
+
+    print("index")
     index_highest_prob_big = np.argmax(original_probs, axis=-1)
+    print("index 2")
     index_highest_prob_trans = np.argmax(transformed_probs, axis=-1)
+    print("index 3")
     index_highest_prob_small = np.argmax(filled_up_small_probs, axis=-1)
 
+    print("acc")
     accuracy_trans_tmp = index_highest_prob_trans == index_highest_prob_small
+    print("acc 2")
     accuracy_orig_tmp = index_highest_prob_big == index_highest_prob_small
 
+    print("calculate something")
     accuracy_trans = np.count_nonzero(accuracy_trans_tmp) / (n_test_samples * 64)
+    print("one more time")
     accuracy_orig = np.count_nonzero(accuracy_orig_tmp) / (n_test_samples * 64)
 
     with open(f"logfiles/{filename}.txt", "a") as logfile:
@@ -316,9 +334,15 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                       f"Percentage of true tokens that had the highest probability in the transformed "
                       f"distributions: {accuracy_trans}%\n")
 
+    del index_highest_prob_trans, index_highest_prob_big, index_highest_prob_small
+    del accuracy_trans_tmp, accuracy_orig_tmp
+    del accuracy_trans, accuracy_orig
+
+    print("trans dist")
     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
                                                                 filled_up_small_probs)
 
+    print("expand dims")
     trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)
 

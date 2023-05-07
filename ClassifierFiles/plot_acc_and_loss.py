@@ -7,8 +7,8 @@ def acc_loss_plot(records, filename):
     color = 'tab:blue'
     ax1.set_xlabel('epochs')
     ax1.set_ylabel('loss', color=color)
-    ax1.plot(range(len(records["train_loss"])), records["train_loss"], label="training loss", color=color)
-    ax1.plot(range(len(records["val_loss"])), records["val_loss"], label="validation loss", color=color,
+    ax1.plot(range(1, len(records["train_loss"])+1), records["train_loss"], label="training loss", color=color)
+    ax1.plot(range(1, len(records["val_loss"])+1), records["val_loss"], label="validation loss", color=color,
              linestyle='dashed')
     ax1.tick_params(axis='y', labelcolor=color)
 
@@ -16,8 +16,8 @@ def acc_loss_plot(records, filename):
 
     color = 'tab:red'
     ax2.set_ylabel('accuracy', color=color)  # we already handled the x-label with ax1
-    ax2.plot(range(len(records["train_accuracy"])), records["train_accuracy"], label="training accuracy", color=color)
-    ax2.plot(range(len(records["val_accuracy"])), records["val_accuracy"], label="validation accuracy", color=color,
+    ax2.plot(range(1, len(records["train_accuracy"])+1), records["train_accuracy"], label="training accuracy", color=color)
+    ax2.plot(range(1, len(records["val_accuracy"])+1), records["val_accuracy"], label="validation accuracy", color=color,
              linestyle='dashed')
     ax2.tick_params(axis='y', labelcolor=color)
 
@@ -33,8 +33,8 @@ def loss_plot(records, file_name):  # for baseline model (we are not calculating
     color = 'tab:blue'
     ax1.set_xlabel('epochs')
     ax1.set_ylabel('loss', color=color)
-    ax1.plot(range(len(records["train_loss"])), records["train_loss"], label="training loss", color=color)
-    ax1.plot(range(len(records["val_loss"])), records["val_loss"], label="validation loss", color=color,
+    ax1.plot(range(1, len(records["train_loss"])+1), records["train_loss"], label="training loss", color=color)
+    ax1.plot(range(1, len(records["val_loss"])+1), records["val_loss"], label="validation loss", color=color,
              linestyle='dashed')
     ax1.tick_params(axis='y', labelcolor=color)
 

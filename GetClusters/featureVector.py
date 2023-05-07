@@ -9,11 +9,20 @@ def scale_feature_vector(feature_vector):
     return scaled_features
 
 
-def load_feature_vector(function, num_features, num_sheets=10000, scaled=True):
+def load_feature_vector(function, bucket_indices, top_p, num_features, num_sheets=10000, scaled=True):
     features = np.zeros((64*num_sheets*9, num_features))
 
+    if function.__name__ == "get_entropy_feature":
+        filename = f"{function.__name__}"
+    elif function.__name__ == "bucket_diff_top_k":
+        filename = f"{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}"
+    elif function.__name__ == "get_top_p_difference":
+        filename = f"{function.__name__}_{top_p}"
+    else:
+        raise Exception(f"{function.__name__} is not a valid transformation function.")
+
     for i in range(9):
-        with open(f"train_data/features_{i}_{function.__name__}.pkl", "rb") as f:
+        with open(f"train_data/features_{i}_{filename}.pkl", "rb") as f:
             feature = pickle.load(f)
             feature = feature.numpy()
 

@@ -8,6 +8,9 @@ NotUsed/data_sorted_by_big_model.py
 NotUsed/config.py
 check_feature_vector_creation.py
 loss_plot.png
+logfiles/
+plots/
+train_data/
 matrix.png
 features_0_get_top_p_difference.pkl
 find_smallest_prob.py

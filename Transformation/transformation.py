@@ -16,14 +16,19 @@ def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.02):
     probSums = dist1 + dist2
     belowThreshold = np.where(probSums < probScaleLimit, 1, 0)
     belowThresholdMask = (belowThreshold / probScaleLimit) * probSums
+    del probSums
     overThresholdMask = 1 - belowThreshold
+    del belowThreshold
     weightMask = belowThresholdMask + overThresholdMask
+    del belowThresholdMask
+    del overThresholdMask
 
     absDiff = np.abs(dist1 - dist2) * weightMask
+    del weightMask
     timeStepDiffs = np.sum(absDiff, axis=-1)
-    sampleDiffs = np.sum(timeStepDiffs, axis=-1)
+    #sampleDiffs = np.sum(timeStepDiffs, axis=-1)
 
-    return absDiff, timeStepDiffs, sampleDiffs
+    return absDiff, timeStepDiffs
 
 
 def f(beta, p, entropy_small, counter):  # solution found here: https://stats.stackexchange.com/questions/521582/controlling-the-entropy-of-a-distribution
@@ -114,7 +119,11 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
                                                      np.expand_dims(target_transformation[:, :, i] /
                                                                     (bucket_indices[i + 1] - index), -1)
 
-    sorted_big_probs = add_min_and_normalize(sorted_big_probs)
+    min_cols = np.amin(sorted_big_probs, axis=-1)
+    output = min_cols < 0
+
+    sorted_big_probs[output, :] = add_min_and_normalize(sorted_big_probs[output, :])
+    sorted_big_probs[~output, :] = normalize(sorted_big_probs[~output, :])
 
     print(f"after transformation number of zeros in array: {(sorted_big_probs.size - np.count_nonzero(sorted_big_probs))}")
     print(f"after transformation number of negative values in array: {np.sum(sorted_big_probs < 0)}")
@@ -131,6 +140,71 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
 
 
 def trans_2(probs, mean_k, top_p):
+    print("now in function")
+    probs = np.expand_dims(probs, 0)
+    print("sorting probs")
+    sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
+
+    print("here now")
+    depth, rows = np.indices(probs.shape)[:2]
+
+    print("at this step")
+    sorted_probs = probs[depth, rows, sorted_indices]
+
+    print("cumulative sum")
+    cumsum = np.cumsum(sorted_probs, axis=-1)
+    print("mask mask")
+    mask = cumsum >= top_p
+    del cumsum
+    print("mask")
+    current_k = np.argmax(mask, axis=-1)
+    print("current k")
+    del mask
+    current_k = np.expand_dims(current_k, -1)
+
+    print("target k")
+    target_k = current_k - mean_k
+
+    print("target k thing")
+    target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
+
+    print("index array")
+    idx_array = np.arange(sorted_probs.shape[-1])
+    idx_array = np.broadcast_to(idx_array, sorted_probs.shape)
+    #idx_array = np.indices(sorted_probs.shape)[-1]
+
+    print("another mask")
+    mask = idx_array <= target_k
+    del idx_array
+
+    print("sum top p")
+    sum_top_p = np.sum(sorted_probs, axis=-1, where=mask, keepdims=True)
+    print("sum not top p")
+    sum_not_top = np.sum(sorted_probs, axis=-1, where=np.invert(mask), keepdims=True)
+
+    print("another target")
+    target_p = np.array([top_p, 1 - top_p])
+
+    print("sort probs again")
+    sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask, out=sorted_probs)
+    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+    sorted_probs = np.multiply(sorted_probs, target_p[0], where=mask, out=sorted_probs)
+    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+    sorted_probs = np.divide(sorted_probs, sum_not_top, where=np.invert(mask), out=sorted_probs)
+    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+    sorted_probs = np.multiply(sorted_probs, target_p[1], where=np.invert(mask), out=sorted_probs)
+    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
+
+    del mask
+    final_probs = np.zeros(sorted_probs.shape)
+    final_probs[depth, rows, sorted_indices] = sorted_probs  # unsort the probabilities
+
+    final_probs = np.squeeze(final_probs, 0)
+
+    return final_probs
+
+
+def trans_3(probs, mean_k, top_p):
     probs = np.expand_dims(probs, 0)
     sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
 
@@ -335,8 +409,9 @@ def get_distances(transformed_probs, bigprobs, smallprobs):
     :return:
     """
 
-    _, dist_trans_tmp, _ = weightedManhattanDistance(transformed_probs, smallprobs, probScaleLimit=0.02)
-    _, dist_big_tmp, _ = weightedManhattanDistance(bigprobs, smallprobs, probScaleLimit=0.02)
+    _, dist_trans_tmp = weightedManhattanDistance(transformed_probs, smallprobs, probScaleLimit=0.02)
+    del transformed_probs
+    _, dist_big_tmp = weightedManhattanDistance(bigprobs, smallprobs, probScaleLimit=0.02)
 
     return dist_trans_tmp, dist_big_tmp
 

@@ -1,5 +1,5 @@
 from ClassifierFiles.trainingDataClassifier import prepare_training_data
-from ClassifierFiles.classifier import BertClassifier
+from ClassifierFiles.classifier import BertClassifier, EarlyStopper
 from ClassifierFiles.trainClassifier import train
 from ClassifierFiles.evaluateClassifier import evaluate
 from ClassifierFiles.predict_label import predict_label
@@ -46,11 +46,12 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
                                          [int(.8 * len(df)), int(.95 * len(df))])
 
     model = BertClassifier(NUM_CLASSES)
+    early_stopper = EarlyStopper(patience=3)
 
     print("  => STARTING TRAINING")
-    train(model, filename, df_train, df_val, LR, EPOCHS, BATCH_SIZE, num_classes=NUM_CLASSES)
+    train(model, filename, df_train, df_val, LR, EPOCHS, BATCH_SIZE, early_stopper=early_stopper)
 
-    torch.save(model.state_dict(), f'models/{function.__name__ }_{NUM_CLASSES}_{LR}_{EPOCHS}.pt')
+    #torch.save(model.state_dict(), f'models/{function.__name__ }_{NUM_CLASSES}_{LR}_{EPOCHS}.pt')
 
     print("  => EVALUATING MODEL")
     """test classifier"""

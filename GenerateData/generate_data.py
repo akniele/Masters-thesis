@@ -165,5 +165,15 @@ def generateData(function, bucket_indices, top_p, num_features, tokenized_data_p
                     pickle.dump(small_indices, k)
 
                 if num_features is not None:
-                    with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
-                        pickle.dump(features, m)
+                    if function.__name__ == "get_entropy_feature":
+                        with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
+                            pickle.dump(features, m)
+                    elif function.__name__ == "bucket_diff_top_k":
+                        with open(f"../pipeline/train_data/features_{i}_{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}.pkl", "wb") as m:
+                            pickle.dump(features, m)
+                    elif function.__name__ == "get_top_p_difference":
+                        with open(f"../pipeline/train_data/features_{i}_{function.__name__}_{top_p}.pkl", "wb") as m:
+                            pickle.dump(features, m)
+                    else:
+                        raise Exception(f"{function.__name__} is not a valid transformation function.")
+

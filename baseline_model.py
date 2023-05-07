@@ -31,8 +31,13 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
     print("  => LOADING MODEL")
     model = MODEL(VOCAB_AFTER_REDUCTION).to(DEVICE)
 
+    early_stopper = EarlyStopper(patience=5)
+
     print("  => LOADING OPTIMIZER")
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    print("  => LOADING LEARNING RATE SCHEDULER")
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, verbose=True)
 
     print("  => PREPARE TRAINING DATA FOR CLASSIFIER")
 
@@ -132,6 +137,8 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
     testDataset = DatasetTest(df_test)
     testLoader = torch.utils.data.DataLoader(testDataset, batch_size=batch_size)
 
+    epoch_last_saved_model = 0
+
     print("  => TRAINING")
     for epoch in range(epochs):
         model.train()
@@ -173,10 +180,21 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
 
             model.val_loss.append(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION))
 
+        if epoch > 20 and model.val_acc[-1] > model.val_acc[-2]:  # whenever val accuracy has increased, save model
+            torch.save(model.state_dict(), f'models/classifier_{filename}.pt')
+            epoch_last_saved_model = epoch + 1
+
         with open(f"logfiles/{filename}.txt", "a") as logfile:
             logfile.write(f'Epochs: {epoch + 1} | Train Loss: '
                           f'{(total_loss_train / (len(df_train)*64*VOCAB_AFTER_REDUCTION)): .4f} | '
                           f'Val Loss: {(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)): .4f}\n\n')
+
+        if early_stopper.early_stop(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)):
+            with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+                logfile.write(f'Model last saved at epoch: {epoch_last_saved_model}.\n')
+            break
+
+        scheduler.step((total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)))
 
     loss_dict = defaultdict()
     loss_dict["train_loss"] = model.train_loss
@@ -376,8 +394,10 @@ class MODEL(nn.Module):
         self.dropout = torch.nn.Dropout(0.2)
         self.l1 = torch.nn.Linear(size, 5000)
         self.l2 = torch.nn.Linear(5000, 10000)
-        self.l3 = torch.nn.Linear(10000, 5000)
-        self.l4 = torch.nn.Linear(5000, size)
+        self.l3 = torch.nn.Linear(10000, 10000)
+        self.l4 = torch.nn.Linear(10000, 10000)
+        self.l5 = torch.nn.Linear(10000, 5000)
+        self.l6 = torch.nn.Linear(5000, size)
         self.softmax = torch.nn.Softmax(dim=-1)
         self.val_loss = list()
         self.train_loss = list()
@@ -387,7 +407,28 @@ class MODEL(nn.Module):
         x = self.dropout(x)
         x = self.activation(self.l2(x))
         x = self.activation(self.l3(x))
+        x = self.activation(self.l4(x))
+        x = self.activation(self.l5(x))
         x = self.dropout(x)
-        x = self.l4(x)
+        x = self.l6(x)
         x = self.softmax(x)
         return x
+
+
+# taken from here: https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = np.inf
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
