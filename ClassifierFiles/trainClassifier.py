@@ -8,7 +8,7 @@ import ClassifierFiles.plot_acc_and_loss as plot_acc_and_loss
 
 
 def train(model, filename, train_data, val_data, learning_rate, epochs, BATCH_SIZE, early_stopper):
-    with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "w") as logfile:
+    with open(f"logfiles/{filename}_classifier.txt", "w") as logfile:
         logfile.write(f'Log file classifier\n')
 
     train, val = datasetTrain.Dataset(train_data), datasetTrain.Dataset(val_data)
@@ -88,14 +88,14 @@ def train(model, filename, train_data, val_data, learning_rate, epochs, BATCH_SI
             torch.save(model.state_dict(), f'models/classifier_{filename}.pt')
             epoch_last_saved_model = epoch_num + 1
 
-        with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+        with open(f"logfiles/{filename}_classifier.txt", "a") as logfile:
             logfile.write(f'Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / (len(train_data)*64): .4f} | '
                           f'Train Accuracy: {total_acc_train / (len(train_data)*64): .4f} | Val Loss: '
                           f'{total_loss_val / (len(val_data)*64): .4f} | Val Accuracy: '
                           f'{total_acc_val / (len(val_data)*64): .4f}\n\n')
 
         if early_stopper.early_stop(total_loss_val / (len(val_data)*64)):
-            with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+            with open(f"logfiles/{filename}_classifier.txt", "a") as logfile:
                 logfile.write(f'Model last saved at epoch: {epoch_last_saved_model}.\n')
             break
 

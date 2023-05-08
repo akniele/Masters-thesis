@@ -1,6 +1,5 @@
 import sys
 sys.path.insert(1, '../../Non-Residual-GANN')
-sys.path.insert(2, '../GetClusters')
 from datasets import Dataset
 from SamplingComparissons import CompareModels
 from Utils import loadGenerator
@@ -13,10 +12,10 @@ from torch.utils.data import Dataset as DatasetPytorch
 import numpy as np
 
 
-BIG_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH8-BIG-BIG-A8-R2-1670318134.3765588/"
-SMALL_MODEL_PATH = "/home/ubuntu/Non-Residual-GANN/Models/MLE+VH2-Mini-BIG-A8-R2-1670318134.2979872"
-TOKENIZED_DATA_PATH = "../pipeline/Data/WikitextDataset-16384-64-ls-100-Train-10pct.pkl"
-TOKENIZER_PATH = "/home/ubuntu/Non-Residual-GANN/Tokenizers/WikitextTokenizer-16384-64-ls-100"
+BIG_MODEL_PATH = "../Non-Residual-GANN/Models/MLE+VH8-BIG-BIG-A8-R2-1670318134.3765588/"
+SMALL_MODEL_PATH = "../Non-Residual-GANN/Models/MLE+VH2-Mini-BIG-A8-R2-1670318134.2979872"
+TOKENIZED_DATA_PATH = "Data/WikitextDataset-16384-64-ls-100-Train-10pct.pkl"
+TOKENIZER_PATH = "../Non-Residual-GANN/Tokenizers/WikitextTokenizer-16384-64-ls-100"
 DEVICE = "cuda:0"
 CHECKPOINT = "Epoch-8"
 SEQUENCE_LENGTH = 64  # Of tokenized pretrained data.
@@ -151,28 +150,28 @@ def generateData(function, bucket_indices, top_p, num_features, tokenized_data_p
             else:
                 sorting = ""
 
-            with open(f"../pipeline/train_data/big_{num_samples//10}_{i}{sorting}.pkl", "wb") as f:
+            with open(f"train_data/big_{num_samples//10}_{i}{sorting}.pkl", "wb") as f:
                 pickle.dump(big_probabilities, f)
 
-            with open(f"../pipeline/train_data/small_{num_samples//10}_{i}{sorting}.pkl", "wb") as g:
+            with open(f"train_data/small_{num_samples//10}_{i}{sorting}.pkl", "wb") as g:
                 pickle.dump(small_probabilities, g)
 
-            with open(f"../pipeline/train_data/indices_big_{num_samples//10}_{i}{sorting}.pkl", "wb") as h:
+            with open(f"train_data/indices_big_{num_samples//10}_{i}{sorting}.pkl", "wb") as h:
                 pickle.dump(big_indices, h)
 
             if not sorted_by_big:
-                with open(f"../pipeline/train_data/indices_small_{num_samples//10}_{i}{sorting}.pkl", "wb") as k:
+                with open(f"train_data/indices_small_{num_samples//10}_{i}{sorting}.pkl", "wb") as k:
                     pickle.dump(small_indices, k)
 
                 if num_features is not None:
                     if function.__name__ == "get_entropy_feature":
-                        with open(f"../pipeline/train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
+                        with open(f"train_data/features_{i}_{function.__name__}.pkl", "wb") as m:
                             pickle.dump(features, m)
                     elif function.__name__ == "bucket_diff_top_k":
-                        with open(f"../pipeline/train_data/features_{i}_{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}.pkl", "wb") as m:
+                        with open(f"train_data/features_{i}_{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}.pkl", "wb") as m:
                             pickle.dump(features, m)
                     elif function.__name__ == "get_top_p_difference":
-                        with open(f"../pipeline/train_data/features_{i}_{function.__name__}_{top_p}.pkl", "wb") as m:
+                        with open(f"train_data/features_{i}_{function.__name__}_{top_p}.pkl", "wb") as m:
                             pickle.dump(features, m)
                     else:
                         raise Exception(f"{function.__name__} is not a valid transformation function.")

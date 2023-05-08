@@ -19,7 +19,7 @@ def get_means_from_training_data(function, bucket_indices, top_p, num_features, 
         for label in unique_labels:  # loop with range number of unique elements
             bool_labels = labels_array == label  # turn labels into booleans
             for i in range(num_features):
-                mean_feature = np.mean(feature_vector[:, i], axis=0, where=bool_labels[:, i])  # for each one, calculate the mean separately
+                mean_feature = np.mean(feature_vector[:, i], axis=0, where=bool_labels)  # for each one, calculate the mean separately
                 mean_dict[f"{function.__name__}_{i}_{label}"] = mean_feature
 
     else:

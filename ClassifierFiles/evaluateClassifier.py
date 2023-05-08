@@ -39,12 +39,10 @@ def evaluate(model, test_data, filename, num_classes):
             acc = (output.argmax(dim=1) == test_label).sum().item()
             total_acc_test += acc
 
-    with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+    with open(f"logfiles/{filename}_classifier.txt", "a") as logfile:
         logfile.write(f'Test Accuracy: {total_acc_test / (len(test_data)*64): .3f}\n')
 
     assert len(pred_labels) == len(true_labels)
 
     confusion_matrix.save_confusion_matrix_to_file(true_labels, pred_labels, num_classes, filename)
-
-    return pred_labels, true_labels
     

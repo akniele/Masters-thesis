@@ -190,7 +190,7 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
                           f'Val Loss: {(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)): .4f}\n\n')
 
         if early_stopper.early_stop(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)):
-            with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+            with open(f"logfiles/{filename}_classifier.txt", "a") as logfile:
                 logfile.write(f'Model last saved at epoch: {epoch_last_saved_model}.\n')
             break
 

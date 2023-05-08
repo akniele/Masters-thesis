@@ -31,5 +31,5 @@ def save_confusion_matrix_to_file(true, pred, num_classes, filename):
     plt.close()
 
     # get recall, precision, etc.
-    with open(f"/home/ubuntu/pipeline/logfiles/{filename}_classifier.txt", "a") as logfile:
+    with open(f"logfiles/{filename}_classifier.txt", "a") as logfile:
         logfile.write(f"classification report:\n{classification_report(true, pred, digits=4)}")

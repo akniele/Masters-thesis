@@ -51,21 +51,15 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
     print("  => STARTING TRAINING")
     train(model, filename, df_train, df_val, LR, EPOCHS, BATCH_SIZE, early_stopper=early_stopper)
 
-    #torch.save(model.state_dict(), f'models/{function.__name__ }_{NUM_CLASSES}_{LR}_{EPOCHS}.pt')
-
     print("  => EVALUATING MODEL")
     """test classifier"""
-    pred_labels, true_labels = evaluate(model, df_test, filename, num_classes=NUM_CLASSES)
-
-    return pred_labels, true_labels
+    evaluate(model, df_test, filename, num_classes=NUM_CLASSES)
 
 
 def make_predictions(num_classes, num_sheets, function, epochs, lr):
     NUM_CLASSES = num_classes
 
     print("  => PREPARE DATA FOR PREDICTIONS")
-
-    df = False
 
     with open(f"train_data/big_10000_9.pkl", "rb") as f:
         probs1 = pickle.load(f)

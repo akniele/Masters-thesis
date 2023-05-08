@@ -41,7 +41,7 @@ def f(beta, p, entropy_small, counter):  # solution found here: https://stats.st
             print(f"error found: {e}")
             print(f" current value of beta: {beta}")
             print(f" entropy of current distribution: {entropy(np.squeeze(p, -1))}")
-            np.save(f'/home/ubuntu/pipeline/plots/broken_distr_{counter[0]}', np.squeeze(p, -1))
+            np.save(f'plots/broken_distr_{counter[0]}', np.squeeze(p, -1))
             counter[0] += 1
             return 1
 
@@ -74,11 +74,12 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
     return transformed_p  # return the big model's probs, transformed to have the same entropy as the small model's probs
 
 
-def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
+def trans_0(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
     print(f"number of zeros in array: {(bigprobs.size - np.count_nonzero(bigprobs))}")
     print(f"number of negative values in array: {np.sum(bigprobs < 0)}")
 
-    bigprobs = np.expand_dims(bigprobs, 0)  # array has only two dimensions at this point
+    if pred_labels is not None:
+        bigprobs = np.expand_dims(bigprobs, 0)  # array has only two dimensions at this point
 
     sorted_indices = np.argsort(bigprobs, axis=-1, kind='stable')[:, :, ::-1]
 
@@ -131,7 +132,8 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     final_probs = np.zeros(sorted_big_probs.shape)
     final_probs[depth, rows, sorted_indices] = sorted_big_probs  # unsort the probabilities
 
-    final_probs = np.squeeze(final_probs, 0)
+    if pred_labels is not None:
+        final_probs = np.squeeze(final_probs, 0)
 
     print(f"after sorting number of zeros in array: {(final_probs.size - np.count_nonzero(final_probs))}")
     print(f"after sorting number of negative values in array: {np.sum(final_probs < 0)}")
@@ -139,9 +141,10 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices):
     return final_probs
 
 
-def trans_2(probs, mean_k, top_p):
+def trans_2(probs, mean_k, top_p, pred_labels):
     print("now in function")
-    probs = np.expand_dims(probs, 0)
+    if pred_labels is not None:
+        probs = np.expand_dims(probs, 0)
     print("sorting probs")
     sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
 
@@ -199,7 +202,8 @@ def trans_2(probs, mean_k, top_p):
     final_probs = np.zeros(sorted_probs.shape)
     final_probs[depth, rows, sorted_indices] = sorted_probs  # unsort the probabilities
 
-    final_probs = np.squeeze(final_probs, 0)
+    if pred_labels is not None:
+        final_probs = np.squeeze(final_probs, 0)
 
     return final_probs
 
@@ -340,6 +344,8 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
 
     transformed_probs = filled_up_probs.copy()
 
+    print(f"shape of transformed probs: {transformed_probs.shape}")
+
     if pred_labels is not None:
         unique_labels = np.unique(pred_labels)
 
@@ -359,12 +365,12 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
                 print("  => BUCKET PROBABILITY TRANSFORMATION")
 
                 transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
-                                                                  means[:num_features], bucket_indices)
+                                                                  means[:num_features], bucket_indices, pred_labels)
 
             elif function.__name__ == "get_top_p_difference":
                 print("  => TOP-P PROBABILITY TRANSFORMATION")
                 transformed_probs[pred_labels == label] = trans_2(transformed_probs[pred_labels == label],
-                                                                  means[:1], top_p=top_p)
+                                                                  means[:1], top_p=top_p, pred_labels=pred_labels)
 
             else:
                 raise Exception(f"{function.__name__} is not a valid transformation function.")
@@ -382,11 +388,11 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
 
         elif function.__name__ == "bucket_diff_top_k":
             print("  => BUCKET PROBABILITY TRANSFORMATION")
-            transformed_probs = trans_0(transformed_probs, means[:num_features], bucket_indices)
+            transformed_probs = trans_0(transformed_probs, means[:num_features], bucket_indices, pred_labels)
 
         elif function.__name__ == "get_top_p_difference":
             print("  => TOP-P PROBABILITY TRANSFORMATION")
-            transformed_probs = trans_2(transformed_probs, means[:1], top_p=top_p)
+            transformed_probs = trans_2(transformed_probs, means[:1], top_p=top_p, pred_labels=pred_labels)
 
         else:
             raise Exception(f"{function.__name__} is not a valid transformation function.")
@@ -423,7 +429,7 @@ def get_mean_distances(dist_trans, dist_big, filename):
     std_dist_trans = np.std(dist_trans).item()
     std_dist_big = np.std(dist_big).item()
 
-    with open(f"/home/ubuntu/pipeline/logfiles/{filename}.txt", "a") as logfile:
+    with open(f"logfiles/{filename}.txt", "a") as logfile:
         logfile.write(f"Mean Weighted Manhattan Distance between transformed distributions and target: "
                       f"{mean_dist_trans}\n"
                       f"Mean Weighted Manhattan Distance between untransformed distributions and target: "

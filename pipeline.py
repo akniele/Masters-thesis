@@ -18,6 +18,33 @@ from Transformation.fill_up_distributions import fill_multiple_distributions
 from baseline_model import baseline
 import os
 import torch
+import random
+
+random.seed(10)
+
+
+def make_directories():
+    # ----- make directories for log files, plots and models if they don't already exist -------- #
+
+    logfile_path = 'logfiles'  # create new directory for log files if it doesn't already exist
+    directory_exists = os.path.exists(logfile_path)
+    if not directory_exists:
+        os.makedirs(logfile_path)
+
+    plot_path = 'plots'  # create new directory for plots if it doesn't already exist
+    directory_exists = os.path.exists(plot_path)
+    if not directory_exists:
+        os.makedirs(plot_path)
+
+    model_path = 'models'  # create new directory for models if it doesn't already exist
+    directory_exists = os.path.exists(model_path)
+    if not directory_exists:
+        os.makedirs(model_path)
+
+    data_path = 'train_data'  # create new directory for train data if it doesn't already exist
+    directory_exists = os.path.exists(data_path)
+    if not directory_exists:
+        os.makedirs(data_path)
 
 
 def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, generate_sorted_by_big_data=False):
@@ -45,35 +72,15 @@ def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, ge
 
 
 def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big,
-                             train_classifier, bucket_indices, top_p, n_test_samples):
+                             train_classifier, bucket_indices, top_p, n_test_samples, random_labels):
 
-    # ----- make directories for log files, plots and models if they don't already exist -------- #
-
-    logfile_path = '/home/ubuntu/pipeline/logfiles'  # create new directory for log files if it doesn't already exist
-    directory_exists = os.path.exists(logfile_path)
-    if not directory_exists:
-        os.makedirs(logfile_path)
-
-    plot_path = '/home/ubuntu/pipeline/plots'  # create new directory for plots if it doesn't already exist
-    directory_exists = os.path.exists(plot_path)
-    if not directory_exists:
-        os.makedirs(plot_path)
-
-    model_path = '/home/ubuntu/pipeline/models'  # create new directory for models if it doesn't already exist
-    directory_exists = os.path.exists(model_path)
-    if not directory_exists:
-        os.makedirs(model_path)
-
-    data_path = '/home/ubuntu/pipeline/train_data'  # create new directory for train data if it doesn't already exist
-    directory_exists = os.path.exists(data_path)
-    if not directory_exists:
-        os.makedirs(data_path)
-
-    # ----- done making directories ------------------------------------------------------------- #
+    assert n_clusters > 0 or n_clusters is None, "n_clusters has to be > 0 or None"
+    assert isinstance(n_clusters, int), 'n_clusters has to be an integer'
 
     if function.__name__ == "get_entropy_feature":
         num_features = 1
         filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}"
+        #filename = "get_entropy_feature_3_5e-05_16"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -135,7 +142,8 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
                                         filename=filename,
                                         generate_data=generate_data,
                                         generate_sorted_by_big_data=generate_sorted_by_big,
-                                        train_classifier=train_classifier)
+                                        train_classifier=train_classifier,
+                                        random_labels=random_labels)
 
     bigprobs, smallprobs, indices1, indices0 = load_test_data(num_test_samples=n_test_samples,
                                                               bucket_indices=bucket_indices)
@@ -165,7 +173,8 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
 
 
 def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr, num_test_samples, num_features,
-          filename, generate_data=False, generate_sorted_by_big_data=False, train_classifier=False):
+          filename, generate_data=False, generate_sorted_by_big_data=False, train_classifier=False,
+          random_labels=False):
 
     NUM_TRAIN_SHEETS = 10_000  # for creating feature vectors, and training classifier
     N_CLUSTERS = num_clusters  # number of clusters used for clustering
@@ -191,7 +200,7 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
     scaled_features = load_feature_vector(function=function, bucket_indices=bucket_indices, top_p=top_p,
                                           num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
 
-    if N_CLUSTERS is not None:
+    if N_CLUSTERS is not None and not random_labels:
         print("  => CLUSTERING")
         labels = k_means_clustering(scaled_features, N_CLUSTERS)
 
@@ -212,8 +221,8 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
 
     if labels is not None:
         if train_classifier:
-            pred_labels, true_labels = train_and_evaluate_classifier.train_and_evaluate_classifier(
-                NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels, NUM_TRAIN_SHEETS, function, filename)
+            train_and_evaluate_classifier.train_and_evaluate_classifier(NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels,
+                                                                        NUM_TRAIN_SHEETS, function, filename)
 
         new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples, function=function,
                                            epochs=EPOCHS, lr=LR)
@@ -221,9 +230,16 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
         print(f"pred labels: {new_pred_labels[:50]}")
 
         new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
+        print(f"shape new_pred_labels: {new_pred_labels.shape}")
 
     else:
-        new_pred_labels = None
+        if random_labels:
+            new_pred_labels = [random.randint(0, N_CLUSTERS - 1) for _ in range(num_test_samples * 64)]
+            print(f"some random labels: {new_pred_labels[:50]}")
+            new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
+            print(f"shape random new_pred_labels: {new_pred_labels.shape}")
+        else:
+            new_pred_labels = None
 
     return new_pred_labels, dict_means
 
