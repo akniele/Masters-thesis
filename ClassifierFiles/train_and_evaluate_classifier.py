@@ -56,7 +56,7 @@ def train_and_evaluate_classifier(num_classes, batch_size, epochs, lr, labels, n
     evaluate(model, df_test, filename, num_classes=NUM_CLASSES)
 
 
-def make_predictions(num_classes, num_sheets, function, epochs, lr):
+def make_predictions(num_classes, num_sheets, filename):
     NUM_CLASSES = num_classes
 
     print("  => PREPARE DATA FOR PREDICTIONS")
@@ -69,7 +69,7 @@ def make_predictions(num_classes, num_sheets, function, epochs, lr):
     print(f"length of pandas frame: {df.shape[0]}")
 
     model = BertClassifier(NUM_CLASSES)
-    model.load_state_dict(torch.load(f'models/{function.__name__ }_{NUM_CLASSES}_{lr}_{epochs}.pt'))
+    model.load_state_dict(torch.load(f'models/classifier_{filename}.pt'))
     model.eval()
 
     print("  => PREDICTING LABELS")

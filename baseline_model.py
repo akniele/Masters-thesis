@@ -180,17 +180,17 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
 
             model.val_loss.append(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION))
 
-        if epoch > 20 and model.val_acc[-1] > model.val_acc[-2]:  # whenever val accuracy has increased, save model
-            torch.save(model.state_dict(), f'models/classifier_{filename}.pt')
+        if epoch > 20 and model.val_loss[-1] < model.val_loss[-2]:  # whenever val accuracy has increased, save model
+            torch.save(model.state_dict(), f'models/{filename}.pt')
             epoch_last_saved_model = epoch + 1
 
         with open(f"logfiles/{filename}.txt", "a") as logfile:
             logfile.write(f'Epochs: {epoch + 1} | Train Loss: '
-                          f'{(total_loss_train / (len(df_train)*64*VOCAB_AFTER_REDUCTION)): .4f} | '
-                          f'Val Loss: {(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)): .4f}\n\n')
+                          f'{(total_loss_train / (len(df_train)*64*VOCAB_AFTER_REDUCTION)): .6f} | '
+                          f'Val Loss: {(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)): .6f}\n\n')
 
         if early_stopper.early_stop(total_loss_val / (len(df_val)*64*VOCAB_AFTER_REDUCTION)):
-            with open(f"logfiles/{filename}_classifier.txt", "a") as logfile:
+            with open(f"logfiles/{filename}.txt", "a") as logfile:
                 logfile.write(f'Model last saved at epoch: {epoch_last_saved_model}.\n')
             break
 
@@ -202,7 +202,7 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
 
     plot_acc_and_loss.loss_plot(loss_dict, f"loss_{filename}")
 
-    torch.save(model.state_dict(), f'models/baseline_{lr}_{epochs}_{batch_size}.pt')
+    torch.save(model.state_dict(), f'models/{filename}.pt')
 
     print("\n\n\n\n")
     print("--------------------")
@@ -279,7 +279,7 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
             original_distances[i*batch_size:(i+1)*batch_size] = dist_big_tmp
 
         with open(f"logfiles/{filename}.txt", "a") as logfile:
-            logfile.write(f"Test loss: {(total_test_loss / (len(df_test)*64*VOCAB_AFTER_REDUCTION))}\n")
+            logfile.write(f"Test loss: {(total_test_loss / (len(df_test)*64*VOCAB_AFTER_REDUCTION)): .6f}\n")
 
         accuracy_trans_tmp = index_highest_prob_trans == index_highest_prob_small
         accuracy_orig_tmp = index_highest_prob_big == index_highest_prob_small
@@ -394,10 +394,8 @@ class MODEL(nn.Module):
         self.dropout = torch.nn.Dropout(0.2)
         self.l1 = torch.nn.Linear(size, 5000)
         self.l2 = torch.nn.Linear(5000, 10000)
-        self.l3 = torch.nn.Linear(10000, 10000)
-        self.l4 = torch.nn.Linear(10000, 10000)
-        self.l5 = torch.nn.Linear(10000, 5000)
-        self.l6 = torch.nn.Linear(5000, size)
+        self.l3 = torch.nn.Linear(10000, 5000)
+        self.l4 = torch.nn.Linear(5000, size)
         self.softmax = torch.nn.Softmax(dim=-1)
         self.val_loss = list()
         self.train_loss = list()
@@ -407,10 +405,8 @@ class MODEL(nn.Module):
         x = self.dropout(x)
         x = self.activation(self.l2(x))
         x = self.activation(self.l3(x))
-        x = self.activation(self.l4(x))
-        x = self.activation(self.l5(x))
         x = self.dropout(x)
-        x = self.l6(x)
+        x = self.l4(x)
         x = self.softmax(x)
         return x
 

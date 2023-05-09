@@ -74,9 +74,6 @@ def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, ge
 def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, generate_data, generate_sorted_by_big,
                              train_classifier, bucket_indices, top_p, n_test_samples, random_labels):
 
-    assert n_clusters > 0 or n_clusters is None, "n_clusters has to be > 0 or None"
-    assert isinstance(n_clusters, int), 'n_clusters has to be an integer'
-
     if function.__name__ == "get_entropy_feature":
         num_features = 1
         filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}"
@@ -224,8 +221,7 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
             train_and_evaluate_classifier.train_and_evaluate_classifier(NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels,
                                                                         NUM_TRAIN_SHEETS, function, filename)
 
-        new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples, function=function,
-                                           epochs=EPOCHS, lr=LR)
+        new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples, filename=filename)
 
         print(f"pred labels: {new_pred_labels[:50]}")
 
