@@ -48,7 +48,7 @@ def f(beta, p, entropy_small, counter):  # solution found here: https://stats.st
     return (new_entropy - entropy_small)**2
 
 
-def trans_1(bigprobs, mean_entropy, upper_bound):
+def entropy_trans(bigprobs, mean_entropy, upper_bound):
     """
     :param bigprobs: a single probability distribution from the big model
     :param smallprobs: a single probability distribution from the small model
@@ -74,7 +74,7 @@ def trans_1(bigprobs, mean_entropy, upper_bound):
     return transformed_p  # return the big model's probs, transformed to have the same entropy as the small model's probs
 
 
-def trans_0(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
+def bucket_trans(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
     print(f"number of zeros in array: {(bigprobs.size - np.count_nonzero(bigprobs))}")
     print(f"number of negative values in array: {np.sum(bigprobs < 0)}")
 
@@ -141,54 +141,40 @@ def trans_0(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
     return final_probs
 
 
-def trans_2(probs, mean_k, top_p, pred_labels):
-    print("now in function")
+def top_p_trans(probs, mean_k, top_p, pred_labels):
     if pred_labels is not None:
         probs = np.expand_dims(probs, 0)
-    print("sorting probs")
+
     sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
 
-    print("here now")
     depth, rows = np.indices(probs.shape)[:2]
 
-    print("at this step")
     sorted_probs = probs[depth, rows, sorted_indices]
 
-    print("cumulative sum")
     cumsum = np.cumsum(sorted_probs, axis=-1)
-    print("mask mask")
+
     mask = cumsum >= top_p
     del cumsum
-    print("mask")
+
     current_k = np.argmax(mask, axis=-1)
-    print("current k")
     del mask
     current_k = np.expand_dims(current_k, -1)
 
-    print("target k")
     target_k = current_k - mean_k
 
-    print("target k thing")
     target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
 
-    print("index array")
     idx_array = np.arange(sorted_probs.shape[-1])
     idx_array = np.broadcast_to(idx_array, sorted_probs.shape)
-    #idx_array = np.indices(sorted_probs.shape)[-1]
 
-    print("another mask")
     mask = idx_array <= target_k
     del idx_array
 
-    print("sum top p")
     sum_top_p = np.sum(sorted_probs, axis=-1, where=mask, keepdims=True)
-    print("sum not top p")
     sum_not_top = np.sum(sorted_probs, axis=-1, where=np.invert(mask), keepdims=True)
 
-    print("another target")
     target_p = np.array([top_p, 1 - top_p])
 
-    print("sort probs again")
     sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask, out=sorted_probs)
     print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
     sorted_probs = np.multiply(sorted_probs, target_p[0], where=mask, out=sorted_probs)
@@ -204,119 +190,6 @@ def trans_2(probs, mean_k, top_p, pred_labels):
 
     if pred_labels is not None:
         final_probs = np.squeeze(final_probs, 0)
-
-    return final_probs
-
-
-def trans_3(probs, mean_k, top_p):
-    probs = np.expand_dims(probs, 0)
-    sorted_indices = np.argsort(probs, axis=-1, kind='stable')[:, :, ::-1]
-
-    depth = np.indices(probs.shape)[0]
-    rows = np.indices(probs.shape)[1]
-
-    print("here?")
-    sorted_probs = probs[depth, rows, sorted_indices]  # sort probabilities descendingly, shape: (1, num_distr, 16384)
-
-    print(f"data type of sorted_probs: {sorted_probs.dtype}")
-    print(f"shape of sorted probs, after sorting: {sorted_probs.shape}")
-    print(f"sum of sorted probs, random distribution: {np.sum(sorted_probs[0,5])}")
-    print(f"smallest element in sorted_probs: {np.min(sorted_probs)}")
-
-    print("or here?")
-    cumsum = np.cumsum(sorted_probs, axis=-1)  # get the cumulative sum of each distribution
-    mask = cumsum >= top_p
-    print("maybe somewhere here?")
-    current_k = np.argmax(mask, axis=-1)  # get the number of tokens the top-p probability mass is currently occupying
-    current_k = np.expand_dims(current_k, -1)
-
-    print("what about there?")
-    target_k = current_k - mean_k  # get the number of tokens we want top-p to be distributed over
-
-    target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
-
-    print("or in this place?")
-    idx_array = np.arange(sorted_probs.shape[-1])
-    idx_array = np.broadcast_to(idx_array, sorted_probs.shape)
-
-    print("maybe this is where it is?")
-    mask = idx_array <= target_k  # create a boolean mask that is True if the index is bigger than the target index
-
-    current_sum = np.sum(sorted_probs, axis=-1, where=mask)
-    print("or could be here?")
-    scaling_factor = 0.9 / (current_sum + np.finfo(float).eps)
-    print("is it the stupid scaling factor?")
-    scaling_factor = np.reshape(scaling_factor, (sorted_probs.shape[0], sorted_probs.shape[1], 1))
-    #print(f"scaling factor: {scaling_factor}")
-    print("or the tmp arrays?")
-    tmp = np.zeros(sorted_probs.shape)
-    print("maybe it's the temps")
-    tmp[mask] = sorted_probs[mask]
-    #print(f"tmp: {tmp}")
-    tmp *= scaling_factor
-    del scaling_factor
-    #print(f"tmp after scaling: {tmp}")
-
-    print("second part of the function")
-    tmp_2 = np.zeros(sorted_probs.shape)
-    print("going strong")
-    current_sum_2 = 1 - current_sum
-    print("last one")
-
-    print(f"number of zeros in array: {(current_sum_2.size - np.count_nonzero(current_sum_2))}")
-    scaling_factor_2 = 0.1 / (current_sum_2 + 10e-10)  #np.finfo(float).eps
-    print("here we are")
-    del current_sum_2
-    scaling_factor_2 = np.reshape(scaling_factor_2, (sorted_probs.shape[0], sorted_probs.shape[1], 1))
-    print("and now here")
-    inverted_mask = np.invert(mask)  # here it crashes!
-    del mask
-    tmp_2[inverted_mask] = sorted_probs[inverted_mask]
-    print("almost done now")
-    tmp_2 *= scaling_factor_2
-    print("finishline")
-    del scaling_factor_2
-    #print(f"tmp_2: after scaling: {tmp_2}")
-
-    print("adding up the two arrays")
-    final_array = tmp + tmp_2
-    #print(f"final_array: {final_array}")
-
-    # cumsum = np.cumsum(sorted_probs, axis=-1)  # get the cumulative sum of each distribution
-    # mask = cumsum >= top_p
-    # current_k = np.argmax(mask, axis=-1)  # get the number of tokens the top-p probability mass is currently occupying
-    # current_k = np.expand_dims(current_k, -1)
-    #
-    # target_k = current_k - mean_k  # get the number of tokens we want top-p to be distributed over
-    #
-    # target_k[target_k < 0] = 0  # replace negative values with 0 (target number of elements k needs to be at least 0)
-    #
-    # idx_array = np.arange(sorted_probs.shape[-1])
-    # idx_array = np.broadcast_to(idx_array, sorted_probs.shape)
-    #
-    # mask = idx_array <= target_k  # create a boolean mask that is True if the index is bigger than the target index
-    #
-    # sum_top_p = np.sum(sorted_probs, axis=-1, where=mask, keepdims=True)  # get the sum of the target_k probabilities
-    # sum_not_top = np.sum(sorted_probs, axis=-1, where=np.invert(mask), keepdims=True)  # get the inverse
-    #
-    # sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask, out=np.zeros_like(sorted_probs)) # divide the top-k probabilities by their current sum
-    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
-    #
-    # sorted_probs = np.multiply(sorted_probs, top_p, where=mask, out=np.zeros_like(sorted_probs))  # divide them by the target sum
-    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
-    #
-    # sorted_probs = np.divide(sorted_probs, sum_not_top, where=np.invert(mask), out=np.zeros_like(sorted_probs))  # same for the other probabilities
-    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
-    #
-    # sorted_probs = np.multiply(sorted_probs, 1 - top_p, where=np.invert(mask), out=np.zeros_like(sorted_probs))
-    # print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
-
-    print("sorting...")
-    final_probs = np.zeros(final_array.shape)
-    final_probs[depth, rows, sorted_indices] = final_array  # unsort the probabilities
-    print(f"number of zeros in array: {(final_probs.size - np.count_nonzero(final_probs))}")
-
-    final_probs = np.squeeze(final_probs, 0)
 
     return final_probs
 
@@ -358,18 +231,18 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
 
             if function.__name__ == "get_entropy_feature":
                 print("  => ENTROPY TRANSFORMATION")
-                transformed_probs[pred_labels == label] = np.apply_along_axis(trans_1, -1,
+                transformed_probs[pred_labels == label] = np.apply_along_axis(entropy_trans, -1,
                                                                               transformed_probs[pred_labels == label],
                                                                               means[:1], upper_bound)
             elif function.__name__ == "bucket_diff_top_k":
                 print("  => BUCKET PROBABILITY TRANSFORMATION")
 
-                transformed_probs[pred_labels == label] = trans_0(transformed_probs[pred_labels == label],
+                transformed_probs[pred_labels == label] = bucket_trans(transformed_probs[pred_labels == label],
                                                                   means[:num_features], bucket_indices, pred_labels)
 
             elif function.__name__ == "get_top_p_difference":
                 print("  => TOP-P PROBABILITY TRANSFORMATION")
-                transformed_probs[pred_labels == label] = trans_2(transformed_probs[pred_labels == label],
+                transformed_probs[pred_labels == label] = top_p_trans(transformed_probs[pred_labels == label],
                                                                   means[:1], top_p=top_p, pred_labels=pred_labels)
 
             else:
@@ -384,15 +257,15 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
 
         if function.__name__ == "get_entropy_feature":
             print("  => ENTROPY TRANSFORMATION")
-            transformed_probs = np.apply_along_axis(trans_1, -1, transformed_probs, means[:1], upper_bound)
+            transformed_probs = np.apply_along_axis(entropy_trans, -1, transformed_probs, means[:1], upper_bound)
 
         elif function.__name__ == "bucket_diff_top_k":
             print("  => BUCKET PROBABILITY TRANSFORMATION")
-            transformed_probs = trans_0(transformed_probs, means[:num_features], bucket_indices, pred_labels)
+            transformed_probs = bucket_trans(transformed_probs, means[:num_features], bucket_indices, pred_labels)
 
         elif function.__name__ == "get_top_p_difference":
             print("  => TOP-P PROBABILITY TRANSFORMATION")
-            transformed_probs = trans_2(transformed_probs, means[:1], top_p=top_p, pred_labels=pred_labels)
+            transformed_probs = top_p_trans(transformed_probs, means[:1], top_p=top_p, pred_labels=pred_labels)
 
         else:
             raise Exception(f"{function.__name__} is not a valid transformation function.")
