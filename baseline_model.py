@@ -219,10 +219,6 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
         entropy_small = np.zeros((n_test_samples, 64, 1))
         entropy_trans = np.zeros((n_test_samples, 64, 1))
 
-        index_highest_prob_trans = np.zeros((n_test_samples, 64, 1))
-        index_highest_prob_big = np.zeros((n_test_samples, 64, 1))
-        index_highest_prob_small = np.zeros((n_test_samples, 64, 1))
-
         for i, (bigprobs, smallprobs, bigindices, smallindices, test_small) in enumerate(tqdm.tqdm(testLoader)):
             bigprobs = bigprobs.squeeze().to(DEVICE)  # [batch_size, SEQUENCE_LENGTH, VOCAB_LENGTH]
             smallprobs = smallprobs.squeeze().to(DEVICE)
@@ -247,14 +243,6 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
             smallprobs = smallprobs.cpu().numpy()
             smallindices = smallindices.cpu().numpy()
             filled_up_small_probs = fill_multiple_distributions(smallprobs, smallindices)
-
-            high_idx_big = np.argmax(filled_up_big_probs, axis=-1)
-            high_idx_trans = np.argmax(filled_up_pred_probs, axis=-1)
-            high_idx_small = np.argmax(filled_up_small_probs, axis=-1)
-
-            index_highest_prob_big[i*batch_size:(i+1)*batch_size] = np.expand_dims(high_idx_big, axis=-1)
-            index_highest_prob_trans[i * batch_size:(i + 1) * batch_size] = np.expand_dims(high_idx_trans, axis=-1)
-            index_highest_prob_small[i * batch_size:(i + 1) * batch_size] = np.expand_dims(high_idx_small, axis=-1)
 
             epsilon = 10e-10
             filled_up_pred_probs += epsilon
@@ -281,12 +269,6 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
         with open(f"logfiles/{filename}.txt", "a") as logfile:
             logfile.write(f"Test loss: {(total_test_loss / (len(df_test)*64*VOCAB_AFTER_REDUCTION)): .6f}\n")
 
-        accuracy_trans_tmp = index_highest_prob_trans == index_highest_prob_small
-        accuracy_orig_tmp = index_highest_prob_big == index_highest_prob_small
-
-        accuracy_trans = np.count_nonzero(accuracy_trans_tmp) / (n_test_samples * 64)
-        accuracy_orig = np.count_nonzero(accuracy_orig_tmp) / (n_test_samples * 64)
-
         small_entropy = np.mean(entropy_small)
         transformed_entropy = np.mean(entropy_trans)
         original_entropy = np.mean(entropy_big)
@@ -294,11 +276,7 @@ def baseline(n_test_samples, batch_size, epochs, lr, filename):
         with open(f"logfiles/{filename}.txt", "a") as logfile:
             logfile.write(f"mean entropy of transformed distributions: {transformed_entropy}\n"
                           f"mean entropy of original big distributions: {original_entropy}\n"
-                          f"mean entropy of original small distributions: {small_entropy}\n"
-                          f"Percentage of true tokens that had the highest probability in the original "
-                          f"distributions: {accuracy_orig}%\n"
-                          f"Percentage of true tokens that had the highest probability in the transformed "
-                          f"distributions: {accuracy_trans}%\n")
+                          f"mean entropy of original small distributions: {small_entropy}\n")
 
         difference_histogram(trans_distances, original_distances, filename)
 

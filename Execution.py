@@ -25,16 +25,16 @@ N_TEST_SAMPLES = 500  # number of samples used for testing, each sample consists
 
 # -------- hyperparameters for transparent pipeline -------- #
 
-FUNCTION = bucket_diff_top_k  # get_top_p_difference   # get_entropy_feature
+FUNCTION = bucket_diff_top_k  #get_top_p_difference   #    # get_entropy_feature
 BUCKET_INDICES = [2, 3]  # if bucket_diff_top_k, choose where buckets should start and end,
 # NB: 0 and len(distribution) are added automatically later!
 TOP_P = 0.77  # probability for get_top_p_difference transformation function
-N_CLUSTERS = None  # number of clusters to use for k-means clustering, if None: no clustering or classifying!
+N_CLUSTERS = 3  # number of clusters to use for k-means clustering, if None: no clustering or classifying!
 BATCH_SIZE = 16
 EPOCHS = 25
 LR = 5e-5
 TRAIN_CLASSIFIER = False  # if True, trains a new classifier
-RANDOM_LABELS = False
+RANDOM_LABELS = True
 
 # ----- end of hyperparameters for transparent pipeline ----- #
 

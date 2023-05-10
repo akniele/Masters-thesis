@@ -46,6 +46,11 @@ def make_directories():
     if not directory_exists:
         os.makedirs(data_path)
 
+    data_path = 'distances'  # create new directory for saving weighted Manhattan distances if it doesn't already exist
+    directory_exists = os.path.exists(data_path)
+    if not directory_exists:
+        os.makedirs(data_path)
+
 
 def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, generate_sorted_by_big_data=False):
     filename = f"baseline_{batch_size}_{epochs}_{lr}"
@@ -76,8 +81,11 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
 
     if function.__name__ == "get_entropy_feature":
         num_features = 1
-        filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}"
-        #filename = "get_entropy_feature_3_5e-05_16"
+        if random_labels:
+            random_l = "random"
+        else:
+            random_l = ""
+        filename = f"{function.__name__}_{n_clusters}_{batch_size}_{epochs}_{lr}{random_l}"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -87,12 +95,17 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
                     f"Learning rate: {lr}\n"
                     f"Generate training data: {generate_data}\n"
                     f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
-                    f"Train classifier: {train_classifier}\n")
+                    f"Train classifier: {train_classifier}\n"
+                    f"Random labels: {random_labels}\n")
             f.close()
 
     elif function.__name__ == "bucket_diff_top_k":
         num_features = len(bucket_indices) + 1
-        filename = f"{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}_{n_clusters}_{batch_size}_{epochs}_{lr}"
+        if random_labels:
+            random_l = "random"
+        else:
+            random_l = ""
+        filename = f"{function.__name__}_{'-'.join([str(i) for i in bucket_indices])}_{n_clusters}_{batch_size}_{epochs}_{lr}{random_l}"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -103,12 +116,17 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
                     f"Learning rate: {lr}\n"
                     f"Generate training data: {generate_data}\n"
                     f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
-                    f"Train classifier: {train_classifier}")
+                    f"Train classifier: {train_classifier}\n"
+                    f"Random labels: {random_labels}\n")
             f.close()
 
     elif function.__name__ == "get_top_p_difference":
         num_features = 1
-        filename = f"{function.__name__}_{top_p}_{n_clusters}_{batch_size}_{epochs}_{lr}"
+        if random_labels:
+            random_l = "random"
+        else:
+            random_l = ""
+        filename = f"{function.__name__}_{top_p}_{n_clusters}_{batch_size}_{epochs}_{lr}{random_l}"
         with open(f"logfiles/{filename}.txt", "w") as f:
             f.write(f"Log file\n"
                     f"Transformation function: {function.__name__}\n"
@@ -119,7 +137,8 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
                     f"Learning rate: {lr}\n"
                     f"Generate training data: {generate_data}\n"
                     f"Generate training data sorted by big model: {generate_sorted_by_big}\n"
-                    f"Train classifier: {train_classifier}\n")
+                    f"Train classifier: {train_classifier}\n"
+                    f"Random labels: {random_labels}\n")
             f.close()
 
     else:
@@ -160,6 +179,9 @@ def run_transparent_pipeline(function, n_clusters, batch_size, epochs, lr, gener
 
     difference_histogram(trans_distances, original_distances, filename)
 
+    with open(f"distances/dist_{filename}.pkl", "wb") as f:
+        pickle.dump(trans_distances, f)
+
     score_mean, score_std = get_mean_distances(trans_distances, original_distances, filename)
     end = time.perf_counter()
 
@@ -197,7 +219,7 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
     scaled_features = load_feature_vector(function=function, bucket_indices=bucket_indices, top_p=top_p,
                                           num_features=NUM_FEATURES, num_sheets=NUM_TRAIN_SHEETS, scaled=True)
 
-    if N_CLUSTERS is not None and not random_labels:
+    if N_CLUSTERS is not None:
         print("  => CLUSTERING")
         labels = k_means_clustering(scaled_features, N_CLUSTERS)
 
@@ -216,7 +238,7 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
         for key, value in dict_means.items():
             logfile.write(f"Feature: {key}\t Mean difference: {value}\n")
 
-    if labels is not None:
+    if labels is not None and not random_labels:
         if train_classifier:
             train_and_evaluate_classifier.train_and_evaluate_classifier(NUM_CLASSES, BATCH_SIZE, EPOCHS, LR, labels,
                                                                         NUM_TRAIN_SHEETS, function, filename)
