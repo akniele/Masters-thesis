@@ -51,6 +51,11 @@ def make_directories():
     if not directory_exists:
         os.makedirs(data_path)
 
+    data_path = 'entropies'  # create new directory for saving entropies if it doesn't already exist
+    directory_exists = os.path.exists(data_path)
+    if not directory_exists:
+        os.makedirs(data_path)   
+
 
 def run_baseline(n_test_samples, batch_size, epochs, lr, generate_data=False, generate_sorted_by_big_data=False):
     filename = f"baseline_{batch_size}_{epochs}_{lr}"
@@ -336,6 +341,9 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
     print("last one")
     original_entropy = np.mean(entropy(original_probs, axis=-1))
 
+    with open(f"entropies/entropies_{filename}.pkl", "wb") as f:
+        pickle.dump(transformed_entropy, f)
+
     with open(f"logfiles/{filename}.txt", "a") as logfile:
         logfile.write(f"mean entropy of transformed distributions: {transformed_entropy}\n"
                       f"mean entropy of original big distributions: {original_entropy}\n"
@@ -344,33 +352,6 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
     del small_entropy
     del transformed_entropy
     del original_entropy
-
-    print("index")
-    index_highest_prob_big = np.argmax(original_probs, axis=-1)
-    print("index 2")
-    index_highest_prob_trans = np.argmax(transformed_probs, axis=-1)
-    print("index 3")
-    index_highest_prob_small = np.argmax(filled_up_small_probs, axis=-1)
-
-    print("acc")
-    accuracy_trans_tmp = index_highest_prob_trans == index_highest_prob_small
-    print("acc 2")
-    accuracy_orig_tmp = index_highest_prob_big == index_highest_prob_small
-
-    print("calculate something")
-    accuracy_trans = np.count_nonzero(accuracy_trans_tmp) / (n_test_samples * 64)
-    print("one more time")
-    accuracy_orig = np.count_nonzero(accuracy_orig_tmp) / (n_test_samples * 64)
-
-    with open(f"logfiles/{filename}.txt", "a") as logfile:
-        logfile.write(f"Percentage of true tokens that had the highest probability in the original "
-                      f"distributions: {accuracy_orig}%\n"
-                      f"Percentage of true tokens that had the highest probability in the transformed "
-                      f"distributions: {accuracy_trans}%\n")
-
-    del index_highest_prob_trans, index_highest_prob_big, index_highest_prob_small
-    del accuracy_trans_tmp, accuracy_orig_tmp
-    del accuracy_trans, accuracy_orig
 
     print("trans dist")
     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
