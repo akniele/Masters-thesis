@@ -4,58 +4,82 @@ from GetClusters.differenceMetrics import get_top_p_difference
 from pipeline import run_transparent_pipeline
 from pipeline import run_baseline
 from pipeline import make_directories
-import sys
+from argparse import ArgumentParser, ArgumentTypeError
 
-"""
-Note: If you are using e.g. the bucket transformation function, and therefore don't need the parameter TOP_P,
-either leave it the way it is or set it to None
-"""
+parser = ArgumentParser()
 
-"""
-Another note: N_CLUSTERS has to be either an int > 0 or None
-"""
+parser.add_argument("pipeline", type=str, choices=["transparent", "baseline"],
+                    default="transparent",
+                    help="specify whether to run the baseline model or the transparent pipeline")
 
-# ------- hyperparameters shared between transparent pipeline and baseline ------ #
+parser.add_argument("--data", required=False, type=bool, default=False,
+                    help="generate new training data and features")
+parser.add_argument("--data2", required=False, type=bool, default=False,
+                    help="generate new training data sorted by probs of big model")
+parser.add_argument("--n_test", required=False, type=int, default=500,
+                    help="the number of samples (sequences of 64 distributions) to test the transformations on")
+parser.add_argument("--lr", required=False, type=float, default=5e-5,
+                    help="the learning rate, either for the baseline model or for the classifier model")
+parser.add_argument("--epochs", required=False, type=int, default=25,
+                    help="the number of epochs, either for the baseline model or for the classifier model")
+parser.add_argument("--batch", required=False, type=int, default=16,
+                    help="the batch size, either for the baseline model or for the classifier model")
+parser.add_argument("--random", required=False, type=bool, default=False,
+                    help="if set to True, use randomly generated labels instead of labels from classifier")
+parser.add_argument("--train_classifier", required=False, type=bool, default=False,
+                    help="if set to True, train classifier model")
+parser.add_argument("--n_clusters", required=False, type=int, default=3,
+                    help="the number of clusters to use for clustering the feature differences,"
+                    "should be either an int > 0, or 0 if you do not want to use clustering")
+parser.add_argument("--top_p", required=False, type=float, default=0.47,
+                    help="the probability mass p used for the top-p transformation function")
+parser.add_argument("--indices", required=False, default=[1, 2], type=int, nargs="+",
+                    help="the bucket indices for the bucket transformation function, pass as a string with"
+                    "a space in between each number")
+parser.add_argument("--function", required=False, choices=[1, 2, 3], type=int, default=1,
+                    help="the transformation function to use, either 1 for 'get_top_p_difference', or"
+                    "2 for 'get_entropy_feature', or 3 for 'bucket_diff_top_k'")
 
-GENERATE_DATA = False  # if True, generates probability distributions as training data, and features
-GENERATE_SORTED_BY_BIG = False  # if True, generate probability distributions sorted by big model, for baseline
-N_TEST_SAMPLES = 500  # number of samples used for testing, each sample consists of a sequence of 64 distributions
+args = parser.parse_args()
 
-# ------- end hyperparameters shared between transparent pipeline and baseline -- #
+generate_data = args.data  # if True, generates probability distributions as training data, and features
+generate_sorted_by_big = args.data2  # if True, generate probability distributions sorted by big model, for baseline
+n_test_samples = args.n_test   # number of samples used for testing
 
-# -------- hyperparameters for transparent pipeline -------- #
+if args.function == 1:
+    function = get_top_p_difference
+elif args.function == 2:
+    function = get_entropy_feature
+elif args.function == 3:
+    function = bucket_diff_top_k
+else:
+    raise ArgumentTypeError('The command line argument here needs to be 1, 2 or 3.')
 
-FUNCTION = bucket_diff_top_k  #get_top_p_difference   #    # get_entropy_feature
-BUCKET_INDICES = [2, 3]  # if bucket_diff_top_k, choose where buckets should start and end,
-# NB: 0 and len(distribution) are added automatically later!
-TOP_P = 0.77  # probability for get_top_p_difference transformation function
-N_CLUSTERS = 3  # number of clusters to use for k-means clustering, if None: no clustering or classifying!
-BATCH_SIZE = 16
-EPOCHS = 25
-LR = 5e-5
-TRAIN_CLASSIFIER = False  # if True, trains a new classifier
-RANDOM_LABELS = True
+bucket_indices = args.indices  # if bucket_diff_top_k, choose where buckets should start and end,
+                               # NB: 0 and len(distribution) are added automatically later!
+top_p = args.top_p  # probability for get_top_p_difference transformation function
 
-# ----- end of hyperparameters for transparent pipeline ----- #
+if args.n_clusters == 0:
+    n_clusters = None  # no clustering or classifying!
+else:
+    n_clusters = args.n_clusters  # number of clusters to use for k-means clustering
 
-
-# --------- hyperparameters for baseline model -------#
-
-LR_BASELINE = 0.1      # 1e-5 original learning rate, now using learning rate scheduler
-EPOCHS_BASELINE = 60
-BATCH_SIZE_BASELINE = 8
-
-# --------- end hyperparameters for baseline model -------#
+batch_size = args.batch  # 16 for classifier model, 8 for baseline model
+epochs = args.epochs
+lr = args.lr
+train_classifier = args.train_classifier  # if True, trains a new classifier
+random_labels = args.random
 
 
 if __name__ == "__main__":
 
     make_directories()
 
-    # run_baseline(n_test_samples=N_TEST_SAMPLES, batch_size=BATCH_SIZE_BASELINE, epochs=EPOCHS_BASELINE, lr=LR_BASELINE,
-    #              generate_data=GENERATE_DATA, generate_sorted_by_big_data=GENERATE_SORTED_BY_BIG)
-
-    run_transparent_pipeline(function=FUNCTION, n_clusters=N_CLUSTERS, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR,
-                             generate_data=GENERATE_DATA, generate_sorted_by_big=GENERATE_SORTED_BY_BIG,
-                             train_classifier=TRAIN_CLASSIFIER, bucket_indices=BUCKET_INDICES, top_p=TOP_P,
-                             n_test_samples=N_TEST_SAMPLES, random_labels=RANDOM_LABELS)
+    if args.pipeline == "baseline":
+        run_baseline(n_test_samples=n_test_samples, batch_size=batch_size, epochs=epochs,
+                     lr=lr, generate_data=generate_data, generate_sorted_by_big_data=generate_sorted_by_big)
+    elif args.pipeline == "transparent":
+        run_transparent_pipeline(function=function, n_clusters=n_clusters, batch_size=batch_size, epochs=epochs, lr=lr,
+                                 generate_data=generate_data, generate_sorted_by_big=generate_sorted_by_big,
+                                 train_classifier=train_classifier, bucket_indices=bucket_indices, top_p=top_p,
+                                 n_test_samples=n_test_samples, random_labels=random_labels)
