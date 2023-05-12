@@ -1,3 +1,3 @@
-# Characterizing, classifying and transforming language model distributions
+# Master's thesis
 
-This is my master's thesis project, currently ongoing. The idea is to find explainable features for comparing the probability distributions output by GPT-type language models of different sizes. Those features are then used to transform the distributions output by one model to be more similar to the ones output by another model. The results of these transformations are compared to the output of a neural model that is trained to transform the distributions in a black-box manner.
+This is my master's thesis project, currently ongoing. The README will be updated soon.
