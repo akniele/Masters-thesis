@@ -12,6 +12,7 @@ logfiles/
 plots/
 models/
 train_data/
+Visualization/
 matrix.png
 spec-file.txt
 run_transparent_pipeline.sh
