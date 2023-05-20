@@ -23,7 +23,7 @@ def acc_loss_plot(records, filename):
 
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     fig.legend(loc='center right', bbox_to_anchor=(0.85, 0.55))
-    plt.savefig(f'plots/acc_loss_{filename}.png')
+    plt.savefig(f'plots/acc_loss_{filename}.svg')
     plt.close()
 
 
@@ -40,5 +40,5 @@ def loss_plot(records, file_name):  # for baseline model (we are not calculating
 
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     fig.legend(loc='center right', bbox_to_anchor=(0.85, 0.55))
-    plt.savefig(f'plots/{file_name}.png')
+    plt.savefig(f'plots/{file_name}.svg')
     plt.close()

@@ -57,9 +57,8 @@ plt.plot(x_values, final_means_big, label="big model")
 plt.plot(x_values, final_means_small, label="small model")
 plt.legend(loc='upper right', bbox_to_anchor=(0.85, 0.55))
 
-plt.title("Mean probabilities across the distributions in the training data")
-plt.xlabel('Indices')
+plt.xlabel('Token')
 plt.ylabel('Mean probability')
 
-plt.savefig(f"/home/ubuntu/pipeline/plots/means_plot.png")
+plt.savefig(f"../plots/means_plot.svg")
 plt.close()
