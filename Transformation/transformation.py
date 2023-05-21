@@ -1,17 +1,15 @@
 import numpy as np
 from tqdm import tqdm
 from scipy.optimize import minimize
-import pickle
 import sys
 import warnings
 
 sys.path.append('../GetClusters')
-#from ClassifierFiles.classifier import BertClassifier
+
 from scipy.stats import entropy # kl-divergence/relative entropy if optional parameter qk is given, else calculate Shannon entropy
 from Transformation.fill_up_distributions import fill_multiple_distributions
 
 
-# Fredrik's metric, for this purpose timeStepDiffs and sampleDiffs returns the same
 def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.02):
     probSums = dist1 + dist2
     belowThreshold = np.where(probSums < probScaleLimit, 1, 0)
@@ -26,7 +24,6 @@ def weightedManhattanDistance(dist1, dist2, probScaleLimit=0.02):
     absDiff = np.abs(dist1 - dist2) * weightMask
     del weightMask
     timeStepDiffs = np.sum(absDiff, axis=-1)
-    #sampleDiffs = np.sum(timeStepDiffs, axis=-1)
 
     return absDiff, timeStepDiffs
 
@@ -75,8 +72,6 @@ def entropy_trans(bigprobs, mean_entropy, upper_bound):
 
 
 def bucket_trans(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
-    print(f"number of zeros in array: {(bigprobs.size - np.count_nonzero(bigprobs))}")
-    print(f"number of negative values in array: {np.sum(bigprobs < 0)}")
 
     if pred_labels is not None:
         bigprobs = np.expand_dims(bigprobs, 0)  # array has only two dimensions at this point
@@ -86,11 +81,6 @@ def bucket_trans(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
     depth, rows = np.indices(bigprobs.shape)[:2]
 
     sorted_big_probs = bigprobs[depth, rows, sorted_indices]
-
-    print(f"number of zeros in array: {(bigprobs.size - np.count_nonzero(bigprobs))}")
-    print(f"number of negative values in array: {np.sum(bigprobs < 0)}")
-
-    #del bigprobs
 
     current_bucket_probs = np.ones((sorted_big_probs.shape[0], sorted_big_probs.shape[1], len(bucket_indices)-1))
 
@@ -126,17 +116,11 @@ def bucket_trans(bigprobs, mean_bucket_trans, bucket_indices, pred_labels):
     sorted_big_probs[output, :] = add_min_and_normalize(sorted_big_probs[output, :])
     sorted_big_probs[~output, :] = normalize(sorted_big_probs[~output, :])
 
-    print(f"after transformation number of zeros in array: {(sorted_big_probs.size - np.count_nonzero(sorted_big_probs))}")
-    print(f"after transformation number of negative values in array: {np.sum(sorted_big_probs < 0)}")
-
     final_probs = np.zeros(sorted_big_probs.shape)
     final_probs[depth, rows, sorted_indices] = sorted_big_probs  # unsort the probabilities
 
     if pred_labels is not None:
         final_probs = np.squeeze(final_probs, 0)
-
-    print(f"after sorting number of zeros in array: {(final_probs.size - np.count_nonzero(final_probs))}")
-    print(f"after sorting number of negative values in array: {np.sum(final_probs < 0)}")
 
     return final_probs
 
@@ -176,13 +160,9 @@ def top_p_trans(probs, mean_k, top_p, pred_labels):
     target_p = np.array([top_p, 1 - top_p])
 
     sorted_probs = np.divide(sorted_probs, sum_top_p, where=mask, out=sorted_probs)
-    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
     sorted_probs = np.multiply(sorted_probs, target_p[0], where=mask, out=sorted_probs)
-    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
     sorted_probs = np.divide(sorted_probs, sum_not_top, where=np.invert(mask), out=sorted_probs)
-    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
     sorted_probs = np.multiply(sorted_probs, target_p[1], where=np.invert(mask), out=sorted_probs)
-    print(f"number of zeros in array: {(sorted_probs.size - np.count_nonzero(sorted_probs))}")
 
     del mask
     final_probs = np.zeros(sorted_probs.shape)
@@ -196,28 +176,10 @@ def top_p_trans(probs, mean_k, top_p, pred_labels):
 
 def transformations(bigprobs, indices, mean_features, num_features, bucket_indices, function,
                     upper_bound, top_p, pred_labels=None):
-    """
-    1. fill up distributions
-    2. create boolean array with pred labels ->
-    3. for each distribution of a certain label, transform distribution using the relevant mean features
-    4. return array with the transformed distributions
-    :param bigprobs:
-    :param pred_labels:
-    :param mean_features: dictionary with mean features
-    :return:
-    """
 
-    print(f"mean features: {mean_features}")
-
-    print(f"zeros before filling up distribution: {np.min(bigprobs)}")
-    print("  => FILL UP DISTRIBUTIONS")
     filled_up_probs = fill_multiple_distributions(bigprobs, indices)
-    print("  => DONE FILLING UP DISTRIBUTIONS")
-    print(f"zeros after filling up distribution: {np.min(filled_up_probs)}")
 
     transformed_probs = filled_up_probs.copy()
-
-    print(f"shape of transformed probs: {transformed_probs.shape}")
 
     if pred_labels is not None:
         unique_labels = np.unique(pred_labels)
@@ -276,18 +238,6 @@ def transformations(bigprobs, indices, mean_features, num_features, bucket_indic
 
 
 def get_distances(transformed_probs, bigprobs, smallprobs):
-    """
-    1. Compare the transformed probs to the small probs (using the average of the weighted Manhattan distance)
-    2. Compare the original big probs to the small probs (using the average of the weighted Manhattan distance)
-    3. See if distance between transformed and small probs is smaller than between original big probs and small probs
-    4. return mean distance between trans and small probs minus mean distance between big and small probs
-    :param small_indices:
-    :param transformed_probs:
-    :param bigprobs:
-    :param smallprobs:
-    :return:
-    """
-
     _, dist_trans_tmp = weightedManhattanDistance(transformed_probs, smallprobs, probScaleLimit=0.02)
     del transformed_probs
     _, dist_big_tmp = weightedManhattanDistance(bigprobs, smallprobs, probScaleLimit=0.02)

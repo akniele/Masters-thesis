@@ -250,17 +250,12 @@ def train(function, bucket_indices, top_p, num_clusters, batch_size, epochs, lr,
 
         new_pred_labels = make_predictions(num_classes=NUM_CLASSES, num_sheets=num_test_samples, filename=filename)
 
-        print(f"pred labels: {new_pred_labels[:50]}")
-
         new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
-        print(f"shape new_pred_labels: {new_pred_labels.shape}")
 
     else:
         if random_labels:
             new_pred_labels = [random.randint(0, N_CLUSTERS - 1) for _ in range(num_test_samples * 64)]
-            print(f"some random labels: {new_pred_labels[:50]}")
             new_pred_labels = np.reshape(new_pred_labels[:num_test_samples*64], (num_test_samples, 64))
-            print(f"shape random new_pred_labels: {new_pred_labels.shape}")
         else:
             new_pred_labels = None
 
@@ -320,25 +315,14 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
                                                         top_p=top_p,
                                                         pred_labels=new_pred_labels)
 
-    print(f"shape transformed_probs: {transformed_probs.shape}")
-    print(f"number of zeros in array: {(transformed_probs.size - np.count_nonzero(transformed_probs))}")
-    print(f"number of negative values in array: {np.sum(transformed_probs < 0)}")
-
     transformed_probs += epsilon  # to get rid of any potential 0s in the distributions
     original_probs += epsilon
 
-    print("added epsilon")
-
     filled_up_small_probs = fill_multiple_distributions(smallprobs, indices0)
-    print("filled up small probs")
     filled_up_small_probs += epsilon
 
-    print("calculating entropy")
-
     small_entropy = np.mean(entropy(filled_up_small_probs, axis=-1))
-    print("second one")
     transformed_entropy = np.mean(entropy(transformed_probs, axis=-1))
-    print("last one")
     original_entropy = np.mean(entropy(original_probs, axis=-1))
 
     with open(f"entropies/entropies_{filename}.pkl", "wb") as f:
@@ -353,11 +337,9 @@ def transform_and_evaluate(bigprobs, smallprobs, indices1, indices0, dict_means,
     del transformed_entropy
     del original_entropy
 
-    print("trans dist")
     trans_distances_tmp, original_distances_tmp = get_distances(transformed_probs, original_probs,
                                                                 filled_up_small_probs)
 
-    print("expand dims")
     trans_distances_tmp = np.expand_dims(trans_distances_tmp, -1)
     original_distances_tmp = np.expand_dims(original_distances_tmp, -1)
 
